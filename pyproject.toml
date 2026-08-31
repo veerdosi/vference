@@ -17,6 +17,8 @@ vference = "vference.cli:main"
 
 [dependency-groups]
 dev = [
+  "cmake>=3.22,<5",
+  "nanobind>=2.0,<3",
   "pytest==8.4.2",
   "ruff==0.12.11",
 ]

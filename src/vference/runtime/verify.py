@@ -9,7 +9,7 @@ import numpy as np
 
 from vference.artifacts.safetensors import scan_model
 
-from .expert_store import SynchronousExpertStore
+from .expert_store import StableSlotExpertStore, SynchronousExpertStore
 
 
 def _source_experts(
@@ -69,6 +69,7 @@ def verify_real_layer_math(
     layer_id: int,
     expert_ids: tuple[int, ...],
     seed: int = 20260901,
+    store_kind: str = "python",
 ) -> dict[str, object]:
     """Compare the upstream stacked-expert operation with streamed real records."""
     arrays = _source_experts(source.resolve(), layer_id, expert_ids)
@@ -84,7 +85,15 @@ def verify_real_layer_math(
         nn.silu(gate) * up, arrays, "down_proj", local_indices
     ).squeeze(-2)
 
-    with SynchronousExpertStore(artifact, capacity=len(expert_ids)) as store:
+    store_types = {
+        "python": SynchronousExpertStore,
+        "stable": StableSlotExpertStore,
+    }
+    try:
+        store_type = store_types[store_kind]
+    except KeyError as error:
+        raise ValueError(f"unknown expert store: {store_kind}") from error
+    with store_type(artifact, capacity=len(expert_ids)) as store:
         actual = store.execute(layer_id, x, indices)
         mx.eval(expected, actual)
         expected_bits = np.asarray(expected.view(mx.uint16))
@@ -100,6 +109,7 @@ def verify_real_layer_math(
         "layer_id": layer_id,
         "expert_ids": list(expert_ids),
         "seed": seed,
+        "store_kind": store_kind,
         "bit_exact": exact,
         "max_abs_error": float(delta.max()),
         "mean_abs_error": float(delta.mean()),

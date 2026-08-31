@@ -5,7 +5,7 @@ import mlx.core as mx
 import mlx.nn as nn
 import numpy as np
 
-from vference.runtime.expert_store import SynchronousExpertStore
+from vference.runtime.expert_store import StableSlotExpertStore, SynchronousExpertStore
 
 
 def _bytes(array: mx.array) -> bytes:
@@ -113,3 +113,97 @@ def test_streamed_experts_match_the_same_quantized_arrays(tmp_path: Path) -> Non
             "misses": 2,
             "bytes_read": 2 * record_offset,
         }
+
+
+def test_stable_slots_match_math_and_keep_addresses(tmp_path: Path) -> None:
+    try:
+        from vference.native import _vference_native  # noqa: F401
+    except ImportError:
+        import pytest
+
+        pytest.skip("native stable-slot extension is not built")
+
+    mx.random.seed(9)
+    expert_count = 3
+    dims = 64
+    projections = {
+        "gate_proj": (dims, dims),
+        "up_proj": (dims, dims),
+        "down_proj": (dims, dims),
+    }
+    experts: list[dict[str, mx.array]] = []
+    for _ in range(expert_count):
+        values = {}
+        for name, shape in projections.items():
+            weight, scales, biases = mx.quantize(
+                mx.random.normal(shape).astype(mx.bfloat16), group_size=64, bits=4
+            )
+            values[f"{name}.weight"] = weight
+            values[f"{name}.scales"] = scales
+            values[f"{name}.biases"] = biases
+        experts.append(values)
+
+    suffixes = (
+        "gate_proj.weight",
+        "gate_proj.scales",
+        "gate_proj.biases",
+        "up_proj.weight",
+        "up_proj.scales",
+        "up_proj.biases",
+        "down_proj.weight",
+        "down_proj.scales",
+        "down_proj.biases",
+    )
+    offset = 0
+    components = []
+    for suffix in suffixes:
+        value = experts[0][suffix]
+        raw = _bytes(value)
+        components.append(
+            {
+                "suffix": suffix,
+                "dtype": "U32" if value.dtype == mx.uint32 else "BF16",
+                "source_shape": [expert_count, *value.shape],
+                "bytes_per_expert": len(raw),
+                "record_offset": offset,
+            }
+        )
+        offset += len(raw)
+    (tmp_path / "experts.index.json").write_text(
+        json.dumps(
+            {
+                "format": "vference.expert-pack.v1",
+                "layer_count": 1,
+                "expert_count_per_layer": expert_count,
+                "record_size": offset,
+                "layer_stride": offset * expert_count,
+                "layer_ids": [0],
+                "components": components,
+            }
+        )
+    )
+    with (tmp_path / "experts.pack").open("wb") as handle:
+        for expert in experts:
+            for suffix in suffixes:
+                handle.write(_bytes(expert[suffix]))
+
+    x = mx.random.normal((1, 1, dims)).astype(mx.bfloat16)
+    with StableSlotExpertStore(tmp_path, capacity=2) as stable:
+        pointers = stable.pool_pointers()
+        first = stable.execute(0, x, mx.array([[[0, 1]]], dtype=mx.int32))
+        mx.eval(first)
+        second = stable.execute(0, x, mx.array([[[2, 0]]], dtype=mx.int32))
+        mx.eval(second)
+        assert stable.pool_pointers() == pointers
+
+    with SynchronousExpertStore(tmp_path, capacity=2) as reference:
+        expected_first = reference.execute(0, x, mx.array([[[0, 1]]], dtype=mx.int32))
+        expected_second = reference.execute(0, x, mx.array([[[2, 0]]], dtype=mx.int32))
+        mx.eval(expected_first, expected_second)
+
+    assert np.array_equal(
+        np.asarray(first.view(mx.uint16)), np.asarray(expected_first.view(mx.uint16))
+    )
+    assert np.array_equal(
+        np.asarray(second.view(mx.uint16)), np.asarray(expected_second.view(mx.uint16))
+    )

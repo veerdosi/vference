@@ -9,7 +9,11 @@ import mlx.nn as nn
 from mlx_lm.models.qwen3_5_moe import Model, ModelArgs
 from mlx_lm.utils import load_tokenizer
 
-from .expert_store import StreamingSwitchGLU, SynchronousExpertStore
+from .expert_store import (
+    StableSlotExpertStore,
+    StreamingSwitchGLU,
+    SynchronousExpertStore,
+)
 
 
 def load_streaming_qwen(
@@ -18,12 +22,21 @@ def load_streaming_qwen(
     cache_capacity: int = 64,
     nocache: bool = False,
     trace_routes: bool = False,
+    store_kind: str = "python",
 ) -> tuple[Model, object, SynchronousExpertStore]:
     """Load the resident text core and attach exact synchronous expert streaming."""
     artifact = artifact.resolve()
     config = json.loads((artifact / "config.json").read_text())
     model = Model(ModelArgs.from_dict(config))
-    store = SynchronousExpertStore(
+    store_types = {
+        "python": SynchronousExpertStore,
+        "stable": StableSlotExpertStore,
+    }
+    try:
+        store_type = store_types[store_kind]
+    except KeyError as error:
+        raise ValueError(f"unknown expert store: {store_kind}") from error
+    store = store_type(
         artifact,
         capacity=cache_capacity,
         nocache=nocache,

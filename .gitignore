@@ -10,6 +10,8 @@ __pycache__/
 /artifacts/
 *.safetensors
 *.pack
+*.so
+/native/build*/
 
 # Large/raw profiler output is local; compact benchmark records stay tracked.
 experiments/raw/

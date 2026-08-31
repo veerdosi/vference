@@ -103,6 +103,7 @@ def _expert_math_verify(args: argparse.Namespace) -> None:
         layer_id=args.layer,
         expert_ids=tuple(args.experts),
         seed=args.seed,
+        store_kind=args.store,
     )
     print_json(result)
     if not result["bit_exact"]:
@@ -120,6 +121,7 @@ def _stream_generate(args: argparse.Namespace) -> None:
             enable_thinking=args.thinking,
             nocache=args.nocache,
             trace_output=args.trace_output,
+            store_kind=args.store,
         )
     )
 
@@ -159,6 +161,7 @@ def build_parser() -> argparse.ArgumentParser:
     math_parser.add_argument("--layer", type=int, default=0)
     math_parser.add_argument("--experts", type=int, nargs="+", default=list(range(8)))
     math_parser.add_argument("--seed", type=int, default=20260901)
+    math_parser.add_argument("--store", choices=("python", "stable"), default="python")
     math_parser.set_defaults(func=_expert_math_verify)
 
     generate_parser = commands.add_parser("stream-generate")
@@ -170,6 +173,7 @@ def build_parser() -> argparse.ArgumentParser:
     generate_parser.add_argument("--thinking", action="store_true")
     generate_parser.add_argument("--nocache", action="store_true")
     generate_parser.add_argument("--trace-output", type=Path)
+    generate_parser.add_argument("--store", choices=("python", "stable"), default="python")
     generate_parser.set_defaults(func=_stream_generate)
 
     replay_parser = commands.add_parser("route-replay")

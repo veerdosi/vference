@@ -3,9 +3,11 @@ from __future__ import annotations
 import statistics
 import time
 import json
+import resource
 from pathlib import Path
 
 import mlx.core as mx
+import psutil
 
 from .model import load_streaming_qwen
 
@@ -35,15 +37,20 @@ def generate_greedy(
     enable_thinking: bool,
     nocache: bool = False,
     trace_output: Path | None = None,
+    store_kind: str = "python",
 ) -> dict[str, object]:
     if max_tokens < 1:
         raise ValueError("max_tokens must be positive")
+    process = psutil.Process()
+    rss_before = process.memory_info().rss
+    swap_before = psutil.swap_memory().used
     load_started = time.perf_counter()
     model, tokenizer, store = load_streaming_qwen(
         artifact,
         cache_capacity=cache_capacity,
         nocache=nocache,
         trace_routes=trace_output is not None,
+        store_kind=store_kind,
     )
     load_seconds = time.perf_counter() - load_started
     try:
@@ -81,10 +88,12 @@ def generate_greedy(
             mx.eval(logits)
             decode_latencies.append(time.perf_counter() - started)
 
+        swap_after = psutil.swap_memory().used
         result = {
             "prompt": prompt,
             "chat_template": chat_template,
             "enable_thinking": enable_thinking,
+            "store_kind": store_kind,
             "prompt_tokens": len(prompt_tokens),
             "output_tokens": output_tokens,
             "output_text": tokenizer.decode(output_tokens),
@@ -102,6 +111,16 @@ def generate_greedy(
             "expert_store": store.stats(),
             "mlx_active_bytes": mx.get_active_memory(),
             "mlx_peak_bytes": mx.get_peak_memory(),
+            "process_rss_bytes": {
+                "before_load": rss_before,
+                "after_generation": process.memory_info().rss,
+                "high_water": resource.getrusage(resource.RUSAGE_SELF).ru_maxrss,
+            },
+            "system_swap_bytes": {
+                "before": swap_before,
+                "after": swap_after,
+                "delta": swap_after - swap_before,
+            },
         }
         if trace_output is not None:
             trace_output.parent.mkdir(parents=True, exist_ok=True)
