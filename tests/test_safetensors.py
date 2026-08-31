@@ -1,3 +1,4 @@
+import subprocess
 from pathlib import Path
 
 from vference.artifacts.safetensors import classify_tensor
@@ -14,4 +15,11 @@ def test_classify_tensor() -> None:
 
 def test_repository_does_not_contain_model_weights() -> None:
     root = Path(__file__).resolve().parents[1]
-    assert not list(root.rglob("*.safetensors"))
+    tracked = subprocess.run(
+        ["git", "ls-files", "*.safetensors", "*.pack"],
+        cwd=root,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.splitlines()
+    assert not tracked

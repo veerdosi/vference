@@ -43,6 +43,15 @@ def _artifact_inspect(args: argparse.Namespace) -> None:
 
 def _storage_probe(args: argparse.Namespace) -> None:
     repo = _repo_root()
+    artifact_identity = None
+    manifest_path = args.file.resolve().parent / "manifest.json"
+    if manifest_path.is_file():
+        manifest = json.loads(manifest_path.read_text())
+        artifact_identity = {
+            "format": manifest.get("format"),
+            "file_sha256": manifest.get("output_sha256", {}).get(args.file.name),
+            "manifest": str(manifest_path),
+        }
     result = probe_storage(
         args.file.resolve(),
         read_size=args.read_size,
@@ -58,6 +67,7 @@ def _storage_probe(args: argparse.Namespace) -> None:
             "model": {
                 "repo": "mlx-community/Qwen3.5-35B-A3B-4bit",
                 "revision": "1e20fd8d42056f870933bf98ca6211024744f7ec",
+                "runtime_artifact": artifact_identity,
             },
             "storage": mount_info(args.file),
             "workload": result,
