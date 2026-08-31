@@ -86,9 +86,20 @@ def scan_shard(path: Path) -> list[TensorEntry]:
 
 def scan_model(model_dir: Path) -> dict[str, TensorEntry]:
     index_path = model_dir / "model.safetensors.index.json"
-    with index_path.open() as handle:
-        index = json.load(handle)
-    weight_map: dict[str, str] = index["weight_map"]
+    if index_path.is_file():
+        with index_path.open() as handle:
+            index = json.load(handle)
+        weight_map: dict[str, str] = index["weight_map"]
+    else:
+        shard_names = sorted(path.name for path in model_dir.glob("*.safetensors"))
+        if not shard_names:
+            raise FileNotFoundError(f"no safetensors files found in {model_dir}")
+        weight_map = {}
+        for shard_name in shard_names:
+            for entry in scan_shard(model_dir / shard_name):
+                if entry.name in weight_map:
+                    raise ValueError(f"duplicate tensor: {entry.name}")
+                weight_map[entry.name] = shard_name
     shard_names = sorted(set(weight_map.values()))
     entries: dict[str, TensorEntry] = {}
     for shard_name in shard_names:
@@ -117,4 +128,3 @@ def classify_tensor(name: str) -> str:
     if name.startswith("mtp."):
         return "mtp"
     return "text_core"
-

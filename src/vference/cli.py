@@ -5,6 +5,7 @@ import json
 from collections import Counter
 from pathlib import Path
 
+from .artifacts.builder import build_qwen35_artifact, verify_qwen35_artifact
 from .artifacts.safetensors import classify_tensor, scan_model
 from .bench.storage import probe_storage
 from .experiments import append_record, make_record
@@ -68,6 +69,20 @@ def _storage_probe(args: argparse.Namespace) -> None:
     print_json(record)
 
 
+def _artifact_build(args: argparse.Namespace) -> None:
+    result = build_qwen35_artifact(
+        args.source, args.output, min_free_bytes=args.min_free_gib * 1024**3
+    )
+    print_json(result.__dict__)
+
+
+def _artifact_verify(args: argparse.Namespace) -> None:
+    result = verify_qwen35_artifact(args.source, args.artifact)
+    print_json(result)
+    if not result["verified"]:
+        raise SystemExit(1)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="vference")
     commands = parser.add_subparsers(required=True)
@@ -75,6 +90,17 @@ def build_parser() -> argparse.ArgumentParser:
     inspect_parser = commands.add_parser("artifact-inspect")
     inspect_parser.add_argument("model", type=Path)
     inspect_parser.set_defaults(func=_artifact_inspect)
+
+    build_parser = commands.add_parser("artifact-build")
+    build_parser.add_argument("source", type=Path)
+    build_parser.add_argument("output", type=Path)
+    build_parser.add_argument("--min-free-gib", type=int, default=30)
+    build_parser.set_defaults(func=_artifact_build)
+
+    verify_parser = commands.add_parser("artifact-verify")
+    verify_parser.add_argument("source", type=Path)
+    verify_parser.add_argument("artifact", type=Path)
+    verify_parser.set_defaults(func=_artifact_verify)
 
     storage_parser = commands.add_parser("storage-probe")
     storage_parser.add_argument("file", type=Path)
