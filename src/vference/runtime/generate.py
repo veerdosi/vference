@@ -64,6 +64,9 @@ def generate_greedy(
         raise ValueError("needle context token count must be positive")
     if needle is not None and repeat_raw_prompt_to_tokens is not None:
         raise ValueError("needle context and repeated-token stress mode are exclusive")
+    effective_decode_cache_policy = decode_cache_policy
+    if effective_decode_cache_policy is None:
+        effective_decode_cache_policy = "layer" if store_kind == "stable" else cache_policy
     process = psutil.Process()
     rss_before = process.memory_info().rss
     swap_before = psutil.swap_memory().used
@@ -162,10 +165,10 @@ def generate_greedy(
             prefill_chunks.append(chunk_memory)
         prefill_seconds = time.perf_counter() - prefill_started
 
-        if decode_cache_policy is not None and decode_cache_policy != cache_policy:
+        if effective_decode_cache_policy != cache_policy:
             if store_kind != "stable":
                 raise ValueError("phase-specific cache policy requires the stable store")
-            store.set_cache_policy(decode_cache_policy)
+            store.set_cache_policy(effective_decode_cache_policy)
 
         output_tokens: list[int] = []
         decode_latencies: list[float] = []
@@ -191,7 +194,7 @@ def generate_greedy(
             "enable_thinking": enable_thinking,
             "store_kind": store_kind,
             "cache_policy": cache_policy,
-            "decode_cache_policy": decode_cache_policy or cache_policy,
+            "decode_cache_policy": effective_decode_cache_policy,
             "prompt_tokens": len(prompt_tokens),
             "prefill_chunk_size": prefill_chunk_size,
             "clear_cache_between_prefill_chunks": clear_cache_between_prefill_chunks,

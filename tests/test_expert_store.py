@@ -4,6 +4,7 @@ from pathlib import Path
 import mlx.core as mx
 import mlx.nn as nn
 import numpy as np
+import pytest
 
 from vference.runtime.expert_store import StableSlotExpertStore, SynchronousExpertStore
 
@@ -119,8 +120,6 @@ def test_stable_slots_match_math_and_keep_addresses(tmp_path: Path) -> None:
     try:
         from vference.native import _vference_native  # noqa: F401
     except ImportError:
-        import pytest
-
         pytest.skip("native stable-slot extension is not built")
 
     mx.random.seed(9)
@@ -243,3 +242,9 @@ def test_stable_slots_match_math_and_keep_addresses(tmp_path: Path) -> None:
         np.asarray(demand_second.view(mx.uint16)),
         np.asarray(expected_first.view(mx.uint16)),
     )
+
+    pack_path = tmp_path / "experts.pack"
+    pack_path.write_bytes(pack_path.read_bytes()[:-1])
+    with StableSlotExpertStore(tmp_path, capacity=2) as truncated:
+        with pytest.raises(RuntimeError, match="short preadv"):
+            truncated.execute(0, x, mx.array([[[2, 0]]], dtype=mx.int32))

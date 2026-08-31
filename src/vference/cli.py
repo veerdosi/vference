@@ -208,13 +208,13 @@ def build_parser() -> argparse.ArgumentParser:
     generate_parser.add_argument("artifact", type=Path)
     generate_parser.add_argument("--prompt", required=True)
     generate_parser.add_argument("--max-tokens", type=int, default=16)
-    generate_parser.add_argument("--cache-capacity", type=int, default=64)
+    generate_parser.add_argument("--cache-capacity", type=int, default=320)
     generate_parser.add_argument("--raw-prompt", action="store_true")
     generate_parser.add_argument("--thinking", action="store_true")
     generate_parser.add_argument("--nocache", action="store_true")
     generate_parser.add_argument("--trace-output", type=Path)
-    generate_parser.add_argument("--store", choices=("python", "stable"), default="python")
-    generate_parser.add_argument("--prefill-chunk-size", type=int, default=1)
+    generate_parser.add_argument("--store", choices=("python", "stable"), default="stable")
+    generate_parser.add_argument("--prefill-chunk-size", type=int, default=512)
     generate_parser.add_argument("--repeat-raw-prompt-to-tokens", type=int)
     generate_parser.add_argument(
         "--cache-policy", choices=("global", "layer", "demand"), default="global"
@@ -222,7 +222,11 @@ def build_parser() -> argparse.ArgumentParser:
     generate_parser.add_argument(
         "--decode-cache-policy", choices=("global", "layer", "demand")
     )
-    generate_parser.add_argument("--clear-cache-between-prefill-chunks", action="store_true")
+    generate_parser.add_argument(
+        "--clear-cache-between-prefill-chunks",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+    )
     generate_parser.add_argument("--needle")
     generate_parser.add_argument("--needle-context-tokens", type=int)
     generate_parser.add_argument("--max-mlx-memory-gib", type=float)
