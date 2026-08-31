@@ -638,6 +638,52 @@ MLX expert arrays is rejected as the primary optimization. Stable preallocated
 slots/native execution are required before spending substantially more RAM on
 expert residency.
 
+#### Stable native-slot results (local measurement, 2026-09-01 SGT)
+
+A nanobind/C++ extension now owns fixed MLX component pools and issues one
+`preadv` per missing record directly into the nine final typed slot regions.
+The Python scheduler maps exact `(layer, expert)` identities to those slots;
+MLX `gather_qmm` executes the unchanged 4-bit affine expert operation. Before a
+slot is overwritten, evaluation of the dependent router result provides the
+required completion barrier. The cache protects every expert in the currently
+known top-8 route while selecting victims. It never substitutes or remaps an
+expert, and an oversized multi-token working set falls back to exact tokenwise
+execution.
+
+The native path passed a real-weight layer-0 oracle bit-for-bit for experts
+0–7: all 16,384 BF16 output elements matched, with zero maximum and mean error.
+A synthetic forced-eviction test also verified stable pool addresses and exact
+outputs across slot reuse. End-to-end greedy runs at capacities 320, 640, and
+1,024 produced the same 256 output token IDs as the Stage 2 Python reference
+(token-list SHA-256
+`e3a136ca3c3eb2c71a59d6df4a6829a6ec58c3f1ad7be35ea482b1200315aaa4`).
+
+Using the same 35-token prompt, 256 generated tokens, `F_NOCACHE`, and an empty
+cache, the measured capacity sweep was:
+
+| Stable slots | Pool bytes | Hit rate | Physical reads | Decode tok/s | p50 / p95 | Peak MLX | Observed system swap delta |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| 320 | 566.23 MB | 39.1% | 100.08 GB | 2.408 | 410 / 531 ms | 2.023 GB | -8.4 MB |
+| 640 | 1.132 GB | 48.2% | 85.11 GB | 2.672 | 367 / 497 ms | 2.590 GB | -8.4 MB |
+| 1,024 | 1.812 GB | 59.2% | 66.93 GB | 3.046 | 325 / 442 ms | 3.269 GB | +499.1 MB |
+
+The 640-slot run improved throughput 11.3% over the capacity-320 Python
+baseline without measured swap growth. The 1,024-slot run improved 26.9% over
+that baseline and 25.6% over the same-capacity Python cache, but its larger pool
+coincided with 499 MB of additional system-wide swap. Because swap is a global
+counter and the short prompt reserves almost no long-context state, this is an
+observation rather than proof of direct attribution. Capacity 1,024 must not be
+made the 8 GB default until the admitted-context memory controller and an 8K
+run show adequate headroom.
+
+Stable slots reduced materialization time to zero. At capacity 1,024, `preadv`
+occupied 49.84 seconds and the router/previous-graph completion barrier 40.35
+seconds of 90.74 seconds inside expert execution. This establishes that the
+larger stable cache is useful, while also identifying synchronization and
+unoverlapped reads—not MLX-array construction—as the next exposed bottlenecks.
+The complete reproducible record is
+`experiments/runtime/stage3-stable-slots-2026-09-01.json`.
+
 Only 3.13% of sorted within-layer selected-ID pairs were adjacent in the v1
 pack. Blindly reading the span between the minimum and maximum of eight routed
 IDs would therefore amplify I/O; coalescing must operate on genuinely adjacent
@@ -739,7 +785,10 @@ misses. Pass all layerwise and greedy-token comparisons. Speed is irrelevant.
 
 Remove per-layer tensor reconstruction and allocator churn. Validate forced
 slot reuse, delayed I/O, generation counters, GPU completion pinning, and memory
-ceilings. Match the Stage 2 outputs.
+ceilings. Match the Stage 2 outputs. **In progress:** stable native slots and
+direct reads are implemented and exact; the current execution path still uses
+MLX `gather_qmm`, and asynchronous ownership plus any custom fused Metal kernel
+remain future work justified only by profiling.
 
 ### Stage 4 — asynchronous demand, trace replay, and prefetch
 

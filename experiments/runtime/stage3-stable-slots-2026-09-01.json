@@ -1,0 +1,127 @@
+{
+  "artifact_sha256": "9b26ebdf13a2863d607e1c3ea6e2528ff0267b7f472f8fd37fd20d3adb497e18",
+  "benchmark_commit": "139e65426649aa8d543ace057e0cfdd01989555b",
+  "cache_state": "F_NOCACHE expert file; explicit stable-slot cache starts empty",
+  "date_local": "2026-09-01",
+  "dependencies": {
+    "cmake": "4.4.3",
+    "mlx": "0.32.2",
+    "mlx-lm": "0.31.3",
+    "nanobind": "2.15.0",
+    "numpy": "2.3.2",
+    "psutil": "7.2.2"
+  },
+  "hardware": {
+    "chip": "Apple M2",
+    "internal_storage": "/dev/disk3s5 APFS over Apple Fabric",
+    "memory_bytes": 8589934592,
+    "model": "Mac14,2",
+    "power": "AC power; battery charging",
+    "thermal_status_after_runs": "No thermal or performance warning recorded by pmset"
+  },
+  "model": {
+    "repository": "mlx-community/Qwen3.5-35B-A3B-4bit",
+    "revision": "1e20fd8d42056f870933bf98ca6211024744f7ec"
+  },
+  "operating_system": {
+    "build": "25G83",
+    "kernel": "Darwin 25.6.0 arm64",
+    "version": "macOS 26.6.2"
+  },
+  "prompt": {
+    "chat_template": true,
+    "enable_thinking": false,
+    "text": "Write a detailed technical essay of at least 1500 words explaining sparse mixture-of-experts inference systems.",
+    "tokens": 35
+  },
+  "runs": [
+    {
+      "cache_capacity_bytes": 566231040,
+      "cache_capacity_records": 320,
+      "decode_calls": 255,
+      "decode_latency_seconds": {
+        "max": 0.6337479579960927,
+        "mean": 0.41534789737288874,
+        "p50": 0.41009529202710837,
+        "p95": 0.5308568330074195
+      },
+      "decode_tokens_per_second": 2.4076202295114197,
+      "expert_store": {
+        "bytes_read": 100083105792,
+        "execute_seconds": 115.538202108,
+        "hits": 36239,
+        "materialize_seconds": 0.0,
+        "misses": 56561,
+        "preadv_seconds": 71.620506947,
+        "router_and_graph_wait_seconds": 43.342282116
+      },
+      "mlx_active_bytes": 2020974730,
+      "mlx_peak_bytes": 2023306856,
+      "output_tokens": 256,
+      "prefill_seconds": 14.6355477499892,
+      "process_rss_high_water_bytes": 1417396224,
+      "system_swap_delta_bytes": -8388608
+    },
+    {
+      "cache_capacity_bytes": 1132462080,
+      "cache_capacity_records": 640,
+      "decode_calls": 255,
+      "decode_latency_seconds": {
+        "max": 0.6317598330206238,
+        "mean": 0.37425612305569483,
+        "p50": 0.3674124160024803,
+        "p95": 0.49690291701699607
+      },
+      "decode_tokens_per_second": 2.6719669723377786,
+      "expert_store": {
+        "bytes_read": 85106294784,
+        "execute_seconds": 103.602301916,
+        "hits": 44703,
+        "materialize_seconds": 0.0,
+        "misses": 48097,
+        "preadv_seconds": 60.961340997,
+        "router_and_graph_wait_seconds": 42.05858202
+      },
+      "mlx_active_bytes": 2587205768,
+      "mlx_peak_bytes": 2589537896,
+      "output_tokens": 256,
+      "prefill_seconds": 13.249181083985604,
+      "process_rss_high_water_bytes": 2085388288,
+      "system_swap_delta_bytes": -8388608
+    },
+    {
+      "cache_capacity_bytes": 1811939328,
+      "cache_capacity_records": 1024,
+      "decode_calls": 255,
+      "decode_latency_seconds": {
+        "max": 0.5918869999877643,
+        "mean": 0.3283372019845581,
+        "p50": 0.32461120799416676,
+        "p95": 0.4422277080011554
+      },
+      "decode_tokens_per_second": 3.0456493932327247,
+      "expert_store": {
+        "bytes_read": 66930278400,
+        "execute_seconds": 90.743212126,
+        "hits": 54975,
+        "materialize_seconds": 0.0,
+        "misses": 37825,
+        "preadv_seconds": 49.843860981,
+        "router_and_graph_wait_seconds": 40.352045417
+      },
+      "mlx_active_bytes": 3266683018,
+      "mlx_peak_bytes": 3269015144,
+      "output_tokens": 256,
+      "prefill_seconds": 12.176347375003388,
+      "process_rss_high_water_bytes": 2008449024,
+      "system_swap_delta_bytes": 499056640
+    }
+  ],
+  "verification": {
+    "greedy_output_tokens_equal_to_stage2_reference": true,
+    "output_token_sha256": "e3a136ca3c3eb2c71a59d6df4a6829a6ec58c3f1ad7be35ea482b1200315aaa4",
+    "real_weight_layer_0_elements_compared": 16384,
+    "real_weight_layer_0_exact": true,
+    "synthetic_forced_eviction_exact": true
+  }
+}
