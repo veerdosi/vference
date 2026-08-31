@@ -6,8 +6,8 @@ __pycache__/
 .ruff_cache/
 
 # Model weights and generated runtime artifacts never belong in Git.
-models/
-artifacts/
+/models/
+/artifacts/
 *.safetensors
 *.pack
 
@@ -15,4 +15,3 @@ artifacts/
 experiments/raw/
 *.trace
 *.prof
-
