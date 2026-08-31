@@ -49,3 +49,17 @@ uv run vference stream-generate artifacts/qwen3.5-35b-a3b-4bit-runtime \
 
 It remains experimental until the 8K context memory and reliability gate
 passes.
+
+For the current 8 GB long-context feasibility configuration, use 320 slots and
+bound allocator caching between prefill chunks:
+
+```sh
+uv run vference stream-generate artifacts/qwen3.5-35b-a3b-4bit-runtime \
+  --prompt 'Your long prompt' --max-tokens 256 --store stable \
+  --cache-capacity 320 --cache-policy global --decode-cache-policy layer \
+  --prefill-chunk-size 512 --clear-cache-between-prefill-chunks --nocache
+```
+
+This configuration has passed one synthetic 8K-total-token run at 2.281 decode
+tok/s without swap growth. It is not yet a release claim; repeated and
+meaningful long-context regressions remain.

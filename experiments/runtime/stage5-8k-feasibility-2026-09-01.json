@@ -1,0 +1,80 @@
+{
+  "artifact_sha256": "9b26ebdf13a2863d607e1c3ea6e2528ff0267b7f472f8fd37fd20d3adb497e18",
+  "benchmark_commit": "893f72a6d165325de8422b950c12289f502f436c",
+  "cache_state": "F_NOCACHE expert file; explicit stable-slot cache starts empty",
+  "date_local": "2026-09-01",
+  "hardware": {
+    "chip": "Apple M2",
+    "memory_bytes": 8589934592,
+    "model": "Mac14,2",
+    "power": "AC power; battery charging",
+    "thermal_status_after_runs": "No thermal or performance warning recorded by pmset"
+  },
+  "model": {
+    "repository": "mlx-community/Qwen3.5-35B-A3B-4bit",
+    "revision": "1e20fd8d42056f870933bf98ca6211024744f7ec"
+  },
+  "operating_system": {
+    "build": "25G83",
+    "version": "macOS 26.6.2"
+  },
+  "workload": {
+    "description": "Synthetic repeated raw-token memory/performance stress probe; not a retrieval or quality test",
+    "generated_tokens": 256,
+    "greedy": true,
+    "prompt_tokens": 7936,
+    "total_tokens_after_generation": 8192
+  },
+  "rejected_run": {
+    "cache_capacity_bytes": 1132462080,
+    "cache_capacity_records": 640,
+    "clear_cache_between_prefill_chunks": false,
+    "decode_cache_policy": "layer",
+    "decode_tokens_per_second": 2.387937936353971,
+    "mlx_peak_bytes": 3469543578,
+    "prefill_cache_policy": "global",
+    "prefill_chunk_size": 512,
+    "prefill_seconds": 200.95790191699052,
+    "reason": "system swap grew during the run",
+    "system_swap_delta_bytes": 1957691392
+  },
+  "passing_run": {
+    "cache_capacity_bytes": 566231040,
+    "cache_capacity_records": 320,
+    "clear_cache_between_prefill_chunks": true,
+    "decode_cache_policy": "layer",
+    "decode_latency_seconds": {
+      "max": 0.5085395839996636,
+      "mean": 0.4383594106502749,
+      "p50": 0.4325131659861654,
+      "p95": 0.48177995899459347
+    },
+    "decode_model_calls": 255,
+    "decode_tokens_per_second": 2.281233106223433,
+    "expert_store": {
+      "bytes_read": 241067556864,
+      "execute_seconds": 293.172698424,
+      "hits": 2484883,
+      "materialize_seconds": 0.0,
+      "misses": 136237,
+      "preadv_seconds": 170.592656199,
+      "router_and_graph_wait_seconds": 120.266443865
+    },
+    "mlx_active_bytes": 2178277514,
+    "mlx_cache_bytes_at_end": 425655906,
+    "mlx_peak_bytes": 2903312538,
+    "prefill_cache_policy": "global",
+    "prefill_chunk_size": 512,
+    "prefill_seconds": 191.7485948749818,
+    "process_rss_high_water_bytes": 1787314176,
+    "system_swap_delta_bytes": -150994944
+  },
+  "verification": {
+    "output_token_sha256": "f4b04a69f0bb425f65d7103580aedf78b786bc324b6c2100083314a9a76b88bd",
+    "tokens_exact_between_rejected_and_passing_memory_policies": true
+  },
+  "qualification": {
+    "provisional_2_tok_s_and_no_swap_gate": "passed once",
+    "release_gate": "not passed; requires repeated runs and meaningful long-context correctness/retrieval cases"
+  }
+}

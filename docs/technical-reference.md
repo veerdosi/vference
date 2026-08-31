@@ -45,14 +45,17 @@ on the same machine and exact model artifact:
 2. correctness-first synchronous demand streaming with no expert prediction or
    asynchronous overlap.
 
-Stage 0 must measure storage and baseline limits, then confirm or revise the
-2.0 tok/s threshold **before** cache, prefetch, or heterogeneous-compute tuning.
-Any revision requires a dated rationale in this document and a fixed benchmark
-manifest. “Material improvement” must also receive a numeric threshold at that
-point, with confidence intervals; until then it means a repeatable improvement
-outside run-to-run noise in both decode throughput and exposed expert-stall
-time. A system that merely completes inference but does not meet the frozen
-threshold is a feasibility demonstration, not a successful runtime.
+Stage 0 measured the internal storage and synchronous runtime limits. The
+absolute threshold is now frozen at 2.0 tok/s. For an optimized policy,
+“material improvement” is provisionally frozen as at least **10% higher decode
+throughput and 10% lower exposed expert-execution time per generated token**
+than synchronous demand streaming on the same context workload and artifact.
+Confidence intervals still require repeated runs. If conventional
+oversubscription cannot complete without termination or uncontrolled swap,
+record that failure and compare the completing runtime against synchronous
+streaming. Any threshold revision requires a dated rationale and fixed
+benchmark manifest. A system that merely completes inference but misses these
+thresholds is a feasibility demonstration, not a successful runtime.
 
 ### 1.2 Artifact acquisition policy
 
@@ -706,6 +709,25 @@ probe completed in 14.00 seconds with 2.568 GB peak MLX memory and no observed
 swap growth. These are feasibility measurements, not the required meaningful
 8K retrieval/quality evaluation.
 
+The first 8K-total feasibility workload used 7,936 synthetic repeated raw
+prompt tokens followed by 256 greedy output tokens. With 640 slots and no MLX
+allocator-cache clearing it decoded at 2.388 tok/s but increased system swap by
+1.96 GB, so that configuration was rejected. Reducing to 320 slots, clearing
+only unused allocator buffers after each completed 512-token prefill chunk,
+then repartitioning from global prefill slots to eight slots per layer for
+decode produced the exact same 256 tokens. It measured 191.75 seconds prefill,
+2.281 decode tok/s, 433 ms median and 482 ms p95 decode latency, 2.903 GB peak
+MLX memory, and a -151 MB system swap delta. `pmset` reported no thermal or
+performance warning.
+
+This passes the provisional absolute throughput/no-swap gate **once**, but it
+is not the release result: the prompt is a synthetic stress sequence rather
+than a meaningful retrieval case, the optimized and synchronous 8K baselines
+have not yet been repeated for confidence intervals, and admission control is
+not yet enforced. The two memory policies produced identical token-list
+SHA-256 `f4b04a69f0bb425f65d7103580aedf78b786bc324b6c2100083314a9a76b88bd`.
+See `experiments/runtime/stage5-8k-feasibility-2026-09-01.json`.
+
 Only 3.13% of sorted within-layer selected-ID pairs were adjacent in the v1
 pack. Blindly reading the span between the minimum and maximum of eight routed
 IDs would therefore amplify I/O; coalescing must operate on genuinely adjacent
@@ -823,8 +845,10 @@ memory above budget or changing outputs. Keep a no-prefetch baseline in CI.
 Implement expert-major chunked prefill, state reservation, context admission,
 and multi-turn correctness. Publish separate TTFT and decode profiles at 4K,
 8K, 16K, 32K, and the largest safely admitted context. **In progress:** exact
-working-set splitting and configurable chunks are implemented; admission
-control, exact state reservation, and the full 8K/256-token gate remain.
+working-set splitting, phase-specific cache policies, and allocator cleanup are
+implemented. One synthetic 8K-total/256-output run cleared the absolute
+throughput and no-swap gate. Admission control, exact state reservation,
+meaningful long-context correctness, and repeated confidence runs remain.
 
 ### Stage 6 — quantization experiments
 
