@@ -9,6 +9,7 @@ from .artifacts.builder import build_qwen35_artifact, verify_qwen35_artifact
 from .artifacts.safetensors import classify_tensor, scan_model
 from .bench.storage import probe_storage
 from .experiments import append_record, make_record
+from .runtime.verify import verify_real_layer_math
 from .system import mount_info, print_json
 
 
@@ -93,6 +94,19 @@ def _artifact_verify(args: argparse.Namespace) -> None:
         raise SystemExit(1)
 
 
+def _expert_math_verify(args: argparse.Namespace) -> None:
+    result = verify_real_layer_math(
+        args.source,
+        args.artifact,
+        layer_id=args.layer,
+        expert_ids=tuple(args.experts),
+        seed=args.seed,
+    )
+    print_json(result)
+    if not result["bit_exact"]:
+        raise SystemExit(1)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="vference")
     commands = parser.add_subparsers(required=True)
@@ -111,6 +125,14 @@ def build_parser() -> argparse.ArgumentParser:
     verify_parser.add_argument("source", type=Path)
     verify_parser.add_argument("artifact", type=Path)
     verify_parser.set_defaults(func=_artifact_verify)
+
+    math_parser = commands.add_parser("expert-math-verify")
+    math_parser.add_argument("source", type=Path)
+    math_parser.add_argument("artifact", type=Path)
+    math_parser.add_argument("--layer", type=int, default=0)
+    math_parser.add_argument("--experts", type=int, nargs="+", default=list(range(8)))
+    math_parser.add_argument("--seed", type=int, default=20260901)
+    math_parser.set_defaults(func=_expert_math_verify)
 
     storage_parser = commands.add_parser("storage-probe")
     storage_parser.add_argument("file", type=Path)
