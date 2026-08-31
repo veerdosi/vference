@@ -9,6 +9,7 @@ from pathlib import Path
 import mlx.core as mx
 import psutil
 
+from .admission import estimate_qwen35_admission
 from .model import load_streaming_qwen
 
 
@@ -25,6 +26,10 @@ def _latency_summary(values: list[float]) -> dict[str, float]:
         "p95": percentile(0.95),
         "max": max(values),
     }
+
+
+def _state_bytes(cache: list[object]) -> int:
+    return sum(int(getattr(item, "nbytes", 0)) for item in cache)
 
 
 def generate_greedy(
@@ -45,6 +50,7 @@ def generate_greedy(
     clear_cache_between_prefill_chunks: bool = False,
     needle: str | None = None,
     needle_context_tokens: int | None = None,
+    max_mlx_memory_bytes: int | None = None,
 ) -> dict[str, object]:
     if max_tokens < 1:
         raise ValueError("max_tokens must be positive")
@@ -119,6 +125,23 @@ def generate_greedy(
         if not prompt_tokens:
             raise ValueError("prompt encoded to zero tokens")
 
+        config = json.loads((artifact / "config.json").read_text())
+        if max_mlx_memory_bytes is None:
+            max_mlx_memory_bytes = int(psutil.virtual_memory().total * 0.375)
+        admission = estimate_qwen35_admission(
+            config,
+            resident_bytes=mx.get_active_memory(),
+            total_tokens=len(prompt_tokens) + max_tokens,
+            prefill_chunk_size=prefill_chunk_size,
+            budget_bytes=max_mlx_memory_bytes,
+        )
+        if not admission.admitted:
+            raise MemoryError(
+                "context rejected before prefill: estimated MLX peak "
+                f"{admission.estimated_peak_bytes / 1024**3:.2f} GiB exceeds "
+                f"the {admission.budget_bytes / 1024**3:.2f} GiB budget"
+            )
+
         cache = model.make_cache()
         prefill_started = time.perf_counter()
         logits = None
@@ -164,6 +187,7 @@ def generate_greedy(
             "chat_template": chat_template,
             "prompt_mode": prompt_mode,
             "needle": needle,
+            "admission": admission.as_dict(),
             "enable_thinking": enable_thinking,
             "store_kind": store_kind,
             "cache_policy": cache_policy,
@@ -189,6 +213,7 @@ def generate_greedy(
             "mlx_active_bytes": mx.get_active_memory(),
             "mlx_peak_bytes": mx.get_peak_memory(),
             "mlx_cache_bytes": mx.get_cache_memory(),
+            "model_state_bytes": _state_bytes(cache),
             "process_rss_bytes": {
                 "before_load": rss_before,
                 "after_generation": process.memory_info().rss,

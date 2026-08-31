@@ -129,6 +129,11 @@ def _stream_generate(args: argparse.Namespace) -> None:
             clear_cache_between_prefill_chunks=args.clear_cache_between_prefill_chunks,
             needle=args.needle,
             needle_context_tokens=args.needle_context_tokens,
+            max_mlx_memory_bytes=(
+                int(args.max_mlx_memory_gib * 1024**3)
+                if args.max_mlx_memory_gib is not None
+                else None
+            ),
         )
     )
 
@@ -188,6 +193,7 @@ def build_parser() -> argparse.ArgumentParser:
     generate_parser.add_argument("--clear-cache-between-prefill-chunks", action="store_true")
     generate_parser.add_argument("--needle")
     generate_parser.add_argument("--needle-context-tokens", type=int)
+    generate_parser.add_argument("--max-mlx-memory-gib", type=float)
     generate_parser.set_defaults(func=_stream_generate)
 
     replay_parser = commands.add_parser("route-replay")
