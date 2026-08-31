@@ -383,6 +383,7 @@ class StableSlotExpertStore(SynchronousExpertStore):
                 start += count
         self._cache: OrderedDict[tuple[int, int], int] = OrderedDict()
         self._slot_keys: list[tuple[int, int] | None] = [None] * capacity
+        self.policy_transitions: list[dict[str, str]] = []
 
         self.hits = 0
         self.misses = 0
@@ -400,6 +401,34 @@ class StableSlotExpertStore(SynchronousExpertStore):
     def close(self) -> None:
         self._cache.clear()
         self._reader = None
+
+    def set_cache_policy(self, cache_policy: str) -> None:
+        """Synchronously clear and repartition slots between inference phases."""
+        if cache_policy not in {"global", "layer"}:
+            raise ValueError(f"unknown stable cache policy: {cache_policy}")
+        if cache_policy == self.cache_policy:
+            return
+        if cache_policy == "layer" and self.capacity < self.layer_count:
+            raise ValueError("layer-partitioned cache needs at least one slot per layer")
+        previous = self.cache_policy
+        mx.synchronize()
+        self._cache.clear()
+        self._slot_keys = [None] * self.capacity
+        self._free_slots = list(range(self.capacity - 1, -1, -1))
+        self._free_slots_by_layer = {}
+        self._layer_capacities = {}
+        if cache_policy == "layer":
+            base, extra = divmod(self.capacity, self.layer_count)
+            start = 0
+            for ordinal, layer_id in enumerate(self.layer_ids):
+                count = base + (ordinal < extra)
+                self._layer_capacities[layer_id] = count
+                self._free_slots_by_layer[layer_id] = list(
+                    range(start + count - 1, start - 1, -1)
+                )
+                start += count
+        self.cache_policy = cache_policy
+        self.policy_transitions.append({"from": previous, "to": cache_policy})
 
     def _record_offset(self, layer_id: int, expert_id: int) -> int:
         try:
@@ -579,6 +608,7 @@ class StableSlotExpertStore(SynchronousExpertStore):
         values = super().stats()
         values["implementation"] = "stable_native_slots"
         values["cache_policy"] = self.cache_policy
+        values["policy_transitions"] = list(self.policy_transitions)
         return values
 
     def pool_pointers(self) -> dict[str, int]:

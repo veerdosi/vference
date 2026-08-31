@@ -41,6 +41,7 @@ def generate_greedy(
     prefill_chunk_size: int = 1,
     repeat_raw_prompt_to_tokens: int | None = None,
     cache_policy: str = "global",
+    decode_cache_policy: str | None = None,
 ) -> dict[str, object]:
     if max_tokens < 1:
         raise ValueError("max_tokens must be positive")
@@ -93,6 +94,11 @@ def generate_greedy(
             mx.eval(logits)
         prefill_seconds = time.perf_counter() - prefill_started
 
+        if decode_cache_policy is not None and decode_cache_policy != cache_policy:
+            if store_kind != "stable":
+                raise ValueError("phase-specific cache policy requires the stable store")
+            store.set_cache_policy(decode_cache_policy)
+
         output_tokens: list[int] = []
         decode_latencies: list[float] = []
         eos_ids = set(tokenizer.eos_token_ids)
@@ -115,6 +121,7 @@ def generate_greedy(
             "enable_thinking": enable_thinking,
             "store_kind": store_kind,
             "cache_policy": cache_policy,
+            "decode_cache_policy": decode_cache_policy or cache_policy,
             "prompt_tokens": len(prompt_tokens),
             "prefill_chunk_size": prefill_chunk_size,
             "output_tokens": output_tokens,

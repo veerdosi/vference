@@ -198,6 +198,14 @@ def test_stable_slots_match_math_and_keep_addresses(tmp_path: Path) -> None:
         batch_indices = mx.array([[[0, 1], [2, 0]]], dtype=mx.int32)
         split_batch = stable.execute(0, batch_x, batch_indices)
         mx.eval(split_batch)
+        stable.set_cache_policy("layer")
+        after_transition = stable.execute(
+            0, x, mx.array([[[0, 1]]], dtype=mx.int32)
+        )
+        mx.eval(after_transition)
+        assert stable.stats()["policy_transitions"] == [
+            {"from": "global", "to": "layer"}
+        ]
         assert stable.pool_pointers() == pointers
 
     with SynchronousExpertStore(tmp_path, capacity=2) as reference:
@@ -215,4 +223,8 @@ def test_stable_slots_match_math_and_keep_addresses(tmp_path: Path) -> None:
     assert np.array_equal(
         np.asarray(split_batch.view(mx.uint16)),
         np.asarray(expected_batch.view(mx.uint16)),
+    )
+    assert np.array_equal(
+        np.asarray(after_transition.view(mx.uint16)),
+        np.asarray(expected_first.view(mx.uint16)),
     )
