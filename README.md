@@ -65,5 +65,7 @@ This configuration averaged 2.278 decode tok/s across three identical
 retrieval returned the expected code. Unsafe contexts are rejected against a
 measured memory model before prefill. Stable slots also match the Python
 exact-expert reference with zero logit error on the first split-state and
-five-domain deterministic corpus. It is not yet a release claim; same-context
-baseline confidence and broader correctness cases remain.
+five-domain deterministic corpus. Against an exact forced-demand 8K baseline,
+it improves throughput 17.6% and reduces exposed expert time 15.7%. It is not
+yet a release claim; broader correctness, stochastic, and failure-injection
+cases remain.

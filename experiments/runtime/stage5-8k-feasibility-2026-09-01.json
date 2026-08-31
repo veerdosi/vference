@@ -126,8 +126,28 @@
       "8192_token_bytes": 232161280
     }
   },
+  "same_context_demand_baseline": {
+    "benchmark_commit": "0c5aa8a57559595022afd48eb3d1c4d9a17ad696",
+    "description": "Identical bounded global prefill followed by exact forced-demand decode with no cross-token expert hits; stable buffers make this a stronger baseline than Python materialization",
+    "expert_bytes_read": 270672592896,
+    "expert_execute_seconds_total": 313.949856996,
+    "mean_decode_latency_seconds": 0.5163262233257924,
+    "output_tokens_exact": true,
+    "prefill_expert_execute_seconds_isolated": 185.160237872,
+    "prefill_seconds": 192.69128762499895,
+    "sustained_decode_tokens_per_second": 1.93676004592356,
+    "system_swap_delta_bytes": -8454144
+  },
+  "optimized_vs_demand": {
+    "baseline_decode_expert_milliseconds_per_call": 505.0573298980392,
+    "expert_execution_time_reduction_percent": 15.698392177245779,
+    "mean_decode_latency_reduction_percent": 14.97142969331714,
+    "optimized_decode_expert_milliseconds_per_call": 425.77144953071894,
+    "throughput_improvement_percent": 17.607670232755403
+  },
   "qualification": {
     "provisional_2_tok_s_and_no_swap_gate": "passed in three identical sustained runs",
-    "release_gate": "not passed; same-context baseline confidence, multi-turn, and broader correctness corpus remain"
+    "provisional_10_percent_improvement_gates": "passed against exact forced-demand same-context baseline",
+    "release_gate": "not passed; broader correctness, failure injection, and stochastic corpus remain"
   }
 }

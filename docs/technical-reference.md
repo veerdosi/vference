@@ -744,8 +744,8 @@ admitted; the previously swap-heavy 640-slot 8K configuration estimated 3.49
 GiB and was rejected before prefill. The estimator exactly matched measured
 state allocations at 1, 513, and 8,192 tokens.
 
-Full release qualification still requires same-context baseline confidence
-and the wider deterministic regression corpus. See
+Full release qualification still requires the wider deterministic and
+stochastic regression corpus plus failure injection. See
 `experiments/runtime/stage5-8k-feasibility-2026-09-01.json`.
 
 The first split-state and cross-domain runtime corpus now compare the stable
@@ -758,6 +758,21 @@ tokens. This confirms that storage/cache implementation does not worsen these
 outputs; it does not replace BF16-versus-quantized quality evaluation. The
 tracked corpus is `experiments/corpus/runtime-v1.json`, and results are in
 `experiments/runtime/runtime-correctness-v1-2026-09-01.json`.
+
+For the frozen same-context baseline, the runtime used the identical safe
+7,936-token prefill and then cleared expert identities before every decoded
+layer, forcing all exact top-8 experts to be synchronously read. This baseline
+uses stable native buffers, so it is stronger than the Python materializing
+path, and it preserved all 256 output tokens. It sustained 1.937 tok/s versus
+the optimized three-run mean of 2.278 tok/s: a 17.6% improvement. Mean token
+latency fell 15.0%.
+
+An otherwise identical prefill-only run isolated 185.16 seconds of expert
+execution before decode. Subtracting it from the complete measurements gives
+505.1 ms of expert execution per demand-baseline model call and a three-run
+optimized mean of 425.8 ms, a 15.7% reduction. Both frozen 10% material-
+improvement thresholds therefore pass at the 8K context. Neither policy grew
+swap or changed output tokens, and `pmset` reported no thermal warning.
 
 Only 3.13% of sorted within-layer selected-ID pairs were adjacent in the v1
 pack. Blindly reading the span between the minimum and maximum of eight routed
@@ -882,8 +897,9 @@ throughput and no-swap gate in three repetitions, and a separate 7,936-token
 needle-retrieval case passed. Exact Qwen state accounting and measured-profile
 admission are implemented. The first multi-turn split-state reference and a
 five-domain deterministic corpus pass exactly. Same-context baseline
-confidence and broader cases such as tool calls, schemas, adversarial churn,
-and stochastic sampling remain.
+performance clears both frozen 10% improvement thresholds. Broader cases such
+as tool calls, schemas, adversarial churn, corruption/failure injection, and
+stochastic sampling remain.
 
 ### Stage 6 — quantization experiments
 
