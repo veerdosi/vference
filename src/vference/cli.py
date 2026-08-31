@@ -216,8 +216,12 @@ def build_parser() -> argparse.ArgumentParser:
     generate_parser.add_argument("--store", choices=("python", "stable"), default="python")
     generate_parser.add_argument("--prefill-chunk-size", type=int, default=1)
     generate_parser.add_argument("--repeat-raw-prompt-to-tokens", type=int)
-    generate_parser.add_argument("--cache-policy", choices=("global", "layer"), default="global")
-    generate_parser.add_argument("--decode-cache-policy", choices=("global", "layer"))
+    generate_parser.add_argument(
+        "--cache-policy", choices=("global", "layer", "demand"), default="global"
+    )
+    generate_parser.add_argument(
+        "--decode-cache-policy", choices=("global", "layer", "demand")
+    )
     generate_parser.add_argument("--clear-cache-between-prefill-chunks", action="store_true")
     generate_parser.add_argument("--needle")
     generate_parser.add_argument("--needle-context-tokens", type=int)

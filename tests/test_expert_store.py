@@ -206,6 +206,13 @@ def test_stable_slots_match_math_and_keep_addresses(tmp_path: Path) -> None:
         assert stable.stats()["policy_transitions"] == [
             {"from": "global", "to": "layer"}
         ]
+        stable.set_cache_policy("demand")
+        misses_before = stable.stats()["misses"]
+        demand_first = stable.execute(0, x, mx.array([[[0, 1]]], dtype=mx.int32))
+        mx.eval(demand_first)
+        demand_second = stable.execute(0, x, mx.array([[[0, 1]]], dtype=mx.int32))
+        mx.eval(demand_second)
+        assert stable.stats()["misses"] == misses_before + 4
         assert stable.pool_pointers() == pointers
 
     with SynchronousExpertStore(tmp_path, capacity=2) as reference:
@@ -226,5 +233,13 @@ def test_stable_slots_match_math_and_keep_addresses(tmp_path: Path) -> None:
     )
     assert np.array_equal(
         np.asarray(after_transition.view(mx.uint16)),
+        np.asarray(expected_first.view(mx.uint16)),
+    )
+    assert np.array_equal(
+        np.asarray(demand_first.view(mx.uint16)),
+        np.asarray(expected_first.view(mx.uint16)),
+    )
+    assert np.array_equal(
+        np.asarray(demand_second.view(mx.uint16)),
         np.asarray(expected_first.view(mx.uint16)),
     )

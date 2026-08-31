@@ -341,7 +341,7 @@ class StableSlotExpertStore(SynchronousExpertStore):
         self.capacity = capacity
         self.nocache = nocache
         self.trace_routes = trace_routes
-        if cache_policy not in {"global", "layer"}:
+        if cache_policy not in {"global", "layer", "demand"}:
             raise ValueError(f"unknown stable cache policy: {cache_policy}")
         if cache_policy == "layer" and capacity < self.layer_count:
             raise ValueError("layer-partitioned cache needs at least one slot per layer")
@@ -404,7 +404,7 @@ class StableSlotExpertStore(SynchronousExpertStore):
 
     def set_cache_policy(self, cache_policy: str) -> None:
         """Synchronously clear and repartition slots between inference phases."""
-        if cache_policy not in {"global", "layer"}:
+        if cache_policy not in {"global", "layer", "demand"}:
             raise ValueError(f"unknown stable cache policy: {cache_policy}")
         if cache_policy == self.cache_policy:
             return
@@ -558,6 +558,10 @@ class StableSlotExpertStore(SynchronousExpertStore):
         mx.eval(indices)
         self.router_wait_ns += time.perf_counter_ns() - wait_started
         host_indices = np.asarray(indices, dtype=np.int64)
+        if self.cache_policy == "demand":
+            self._cache.clear()
+            self._slot_keys = [None] * self.capacity
+            self._free_slots = list(range(self.capacity - 1, -1, -1))
         if self.trace_routes:
             self.route_trace.append(
                 {
