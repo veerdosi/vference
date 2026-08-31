@@ -1,0 +1,30 @@
+{
+  "format": "vference.runtime-corpus.v1",
+  "cases": [
+    {
+      "id": "plain_exact",
+      "prompt": "Reply with exactly: Runtime intact.",
+      "max_tokens": 16
+    },
+    {
+      "id": "code",
+      "prompt": "Write a Python function named square that returns the square of an integer. Be concise.",
+      "max_tokens": 24
+    },
+    {
+      "id": "multilingual",
+      "prompt": "日本語で、りんごを一文で説明してください。",
+      "max_tokens": 24
+    },
+    {
+      "id": "json",
+      "prompt": "Return only compact JSON with keys name and active for a service named vference that is active.",
+      "max_tokens": 24
+    },
+    {
+      "id": "reasoning",
+      "prompt": "A cache has 16 slots per layer across 40 layers. State the total slot count and no other number.",
+      "max_tokens": 16
+    }
+  ]
+}

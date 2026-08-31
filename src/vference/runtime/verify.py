@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import os
+import json
 
 import mlx.core as mx
 import mlx.nn as nn
@@ -9,7 +10,12 @@ import numpy as np
 
 from vference.artifacts.safetensors import scan_model
 
-from .expert_store import StableSlotExpertStore, SynchronousExpertStore
+from .expert_store import (
+    StableSlotExpertStore,
+    StreamingSwitchGLU,
+    SynchronousExpertStore,
+)
+from .model import load_streaming_qwen
 
 
 def _source_experts(
@@ -116,3 +122,170 @@ def verify_real_layer_math(
         "elements_compared": int(delta.size),
         "store": stats,
     }
+
+
+def verify_multi_turn_state(
+    artifact: Path,
+    *,
+    first: str,
+    second: str,
+    continuation_tokens: int = 8,
+    cache_capacity: int = 320,
+) -> dict[str, object]:
+    """Compare stable and Python stores under identical split-prefix updates."""
+    if continuation_tokens < 1:
+        raise ValueError("continuation token count must be positive")
+    model, tokenizer, stable_store = load_streaming_qwen(
+        artifact,
+        cache_capacity=cache_capacity,
+        store_kind="stable",
+        cache_policy="global",
+    )
+    reference_store = None
+    try:
+        first_tokens = tokenizer.encode(first, add_special_tokens=False)
+        second_tokens = tokenizer.encode(second, add_special_tokens=False)
+        if not first_tokens or not second_tokens:
+            raise ValueError("both multi-turn segments must encode to tokens")
+
+        def run_split() -> tuple[np.ndarray, list[int], int]:
+            cache = model.make_cache()
+            logits = model(mx.array([first_tokens]), cache=cache)
+            mx.eval(logits)
+            logits = model(mx.array([second_tokens]), cache=cache)[:, -1:]
+            mx.eval(logits)
+            initial = np.asarray(logits.astype(mx.float32)).copy()
+            output: list[int] = []
+            for _ in range(continuation_tokens):
+                token = int(mx.argmax(logits[0, -1]).item())
+                output.append(token)
+                logits = model(mx.array([[token]]), cache=cache)
+                mx.eval(logits)
+            return initial, output, _cache_bytes(cache)
+
+        stable_logits, stable_output, stable_state_bytes = run_split()
+        stable_stats = stable_store.stats()
+
+        reference_store = SynchronousExpertStore(
+            artifact, capacity=cache_capacity
+        )
+        for layer_id, layer in enumerate(model.language_model.layers):
+            layer.mlp.switch_mlp = StreamingSwitchGLU(layer_id, reference_store)
+        reference_logits, reference_output, reference_state_bytes = run_split()
+
+        initial_delta = np.abs(stable_logits - reference_logits)
+        initial_tokens_equal = int(stable_logits.argmax()) == int(
+            reference_logits.argmax()
+        )
+
+        return {
+            "artifact": str(artifact.resolve()),
+            "first_tokens": len(first_tokens),
+            "second_tokens": len(second_tokens),
+            "continuation_tokens": continuation_tokens,
+            "initial_argmax_equal": initial_tokens_equal,
+            "initial_logits_max_abs_error": float(initial_delta.max()),
+            "initial_logits_mean_abs_error": float(initial_delta.mean()),
+            "continuation_exact": stable_output == reference_output,
+            "stable_output_tokens": stable_output,
+            "reference_output_tokens": reference_output,
+            "output_text": tokenizer.decode(stable_output),
+            "stable_state_bytes": stable_state_bytes,
+            "reference_state_bytes": reference_state_bytes,
+            "stable_store": stable_stats,
+            "reference_store": reference_store.stats(),
+        }
+    finally:
+        stable_store.close()
+        if reference_store is not None:
+            reference_store.close()
+
+
+def _cache_bytes(cache: list[object]) -> int:
+    return sum(int(getattr(item, "nbytes", 0)) for item in cache)
+
+
+def verify_runtime_corpus(
+    artifact: Path,
+    corpus_path: Path,
+    *,
+    cache_capacity: int = 320,
+) -> dict[str, object]:
+    """Compare deterministic chat cases between stable and Python stores."""
+    corpus = json.loads(corpus_path.read_text())
+    if corpus.get("format") != "vference.runtime-corpus.v1":
+        raise ValueError("unsupported runtime corpus format")
+    cases = corpus.get("cases", [])
+    if not cases:
+        raise ValueError("runtime corpus has no cases")
+
+    model, tokenizer, stable_store = load_streaming_qwen(
+        artifact,
+        cache_capacity=cache_capacity,
+        store_kind="stable",
+        cache_policy="global",
+    )
+    reference_store = None
+    try:
+        def run_case(case: dict[str, object]) -> tuple[np.ndarray, list[int], str]:
+            prompt_tokens = tokenizer.apply_chat_template(
+                [{"role": "user", "content": str(case["prompt"])}],
+                add_generation_prompt=True,
+                tokenize=True,
+                enable_thinking=False,
+            )
+            cache = model.make_cache()
+            logits = model(mx.array([prompt_tokens]), cache=cache)[:, -1:]
+            mx.eval(logits)
+            initial = np.asarray(logits.astype(mx.float32)).copy()
+            output: list[int] = []
+            eos_ids = set(tokenizer.eos_token_ids)
+            for _ in range(int(case["max_tokens"])):
+                token = int(mx.argmax(logits[0, -1]).item())
+                output.append(token)
+                if token in eos_ids:
+                    break
+                logits = model(mx.array([[token]]), cache=cache)
+                mx.eval(logits)
+            return initial, output, tokenizer.decode(output)
+
+        stable_results = [run_case(case) for case in cases]
+        stable_stats = stable_store.stats()
+
+        reference_store = SynchronousExpertStore(
+            artifact, capacity=cache_capacity
+        )
+        for layer_id, layer in enumerate(model.language_model.layers):
+            layer.mlp.switch_mlp = StreamingSwitchGLU(layer_id, reference_store)
+        reference_results = [run_case(case) for case in cases]
+
+        results = []
+        for case, stable, reference in zip(cases, stable_results, reference_results):
+            delta = np.abs(stable[0] - reference[0])
+            results.append(
+                {
+                    "id": case["id"],
+                    "initial_logits_max_abs_error": float(delta.max()),
+                    "initial_logits_mean_abs_error": float(delta.mean()),
+                    "tokens_exact": stable[1] == reference[1],
+                    "stable_output_tokens": stable[1],
+                    "reference_output_tokens": reference[1],
+                    "output_text": stable[2],
+                }
+            )
+        return {
+            "artifact": str(artifact.resolve()),
+            "corpus": str(corpus_path.resolve()),
+            "case_count": len(results),
+            "all_tokens_exact": all(result["tokens_exact"] for result in results),
+            "max_initial_logits_abs_error": max(
+                result["initial_logits_max_abs_error"] for result in results
+            ),
+            "cases": results,
+            "stable_store": stable_stats,
+            "reference_store": reference_store.stats(),
+        }
+    finally:
+        stable_store.close()
+        if reference_store is not None:
+            reference_store.close()

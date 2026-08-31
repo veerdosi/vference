@@ -10,7 +10,11 @@ from .artifacts.safetensors import classify_tensor, scan_model
 from .bench.storage import probe_storage
 from .bench.cache import replay_trace
 from .experiments import append_record, make_record
-from .runtime.verify import verify_real_layer_math
+from .runtime.verify import (
+    verify_multi_turn_state,
+    verify_real_layer_math,
+    verify_runtime_corpus,
+)
 from .runtime.generate import generate_greedy
 from .system import mount_info, print_json
 
@@ -138,6 +142,30 @@ def _stream_generate(args: argparse.Namespace) -> None:
     )
 
 
+def _multi_turn_verify(args: argparse.Namespace) -> None:
+    result = verify_multi_turn_state(
+        args.artifact,
+        first=args.first,
+        second=args.second,
+        continuation_tokens=args.continuation_tokens,
+        cache_capacity=args.cache_capacity,
+    )
+    print_json(result)
+    if not result["initial_argmax_equal"] or not result["continuation_exact"]:
+        raise SystemExit(1)
+
+
+def _corpus_verify(args: argparse.Namespace) -> None:
+    result = verify_runtime_corpus(
+        args.artifact,
+        args.corpus,
+        cache_capacity=args.cache_capacity,
+    )
+    print_json(result)
+    if not result["all_tokens_exact"]:
+        raise SystemExit(1)
+
+
 def _route_replay(args: argparse.Namespace) -> None:
     print_json(
         replay_trace(
@@ -195,6 +223,20 @@ def build_parser() -> argparse.ArgumentParser:
     generate_parser.add_argument("--needle-context-tokens", type=int)
     generate_parser.add_argument("--max-mlx-memory-gib", type=float)
     generate_parser.set_defaults(func=_stream_generate)
+
+    multi_turn_parser = commands.add_parser("multi-turn-verify")
+    multi_turn_parser.add_argument("artifact", type=Path)
+    multi_turn_parser.add_argument("--first", required=True)
+    multi_turn_parser.add_argument("--second", required=True)
+    multi_turn_parser.add_argument("--continuation-tokens", type=int, default=8)
+    multi_turn_parser.add_argument("--cache-capacity", type=int, default=320)
+    multi_turn_parser.set_defaults(func=_multi_turn_verify)
+
+    corpus_parser = commands.add_parser("corpus-verify")
+    corpus_parser.add_argument("artifact", type=Path)
+    corpus_parser.add_argument("corpus", type=Path)
+    corpus_parser.add_argument("--cache-capacity", type=int, default=320)
+    corpus_parser.set_defaults(func=_corpus_verify)
 
     replay_parser = commands.add_parser("route-replay")
     replay_parser.add_argument("trace", type=Path)
