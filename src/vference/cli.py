@@ -117,6 +117,8 @@ def _stream_generate(args: argparse.Namespace) -> None:
             cache_capacity=args.cache_capacity,
             chat_template=not args.raw_prompt,
             enable_thinking=args.thinking,
+            nocache=args.nocache,
+            trace_output=args.trace_output,
         )
     )
 
@@ -155,6 +157,8 @@ def build_parser() -> argparse.ArgumentParser:
     generate_parser.add_argument("--cache-capacity", type=int, default=64)
     generate_parser.add_argument("--raw-prompt", action="store_true")
     generate_parser.add_argument("--thinking", action="store_true")
+    generate_parser.add_argument("--nocache", action="store_true")
+    generate_parser.add_argument("--trace-output", type=Path)
     generate_parser.set_defaults(func=_stream_generate)
 
     storage_parser = commands.add_parser("storage-probe")

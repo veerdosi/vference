@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import os
+import fcntl
+import time
 from collections import OrderedDict
 from dataclasses import dataclass
 from pathlib import Path
@@ -15,6 +17,7 @@ _NUMPY_DTYPES = {
     "U32": np.dtype("<u4"),
     "BF16": np.dtype("<u2"),
 }
+F_NOCACHE = 48
 
 
 @dataclass(frozen=True)
@@ -47,7 +50,14 @@ class SynchronousExpertStore:
     baseline for later native implementations.
     """
 
-    def __init__(self, artifact: Path, *, capacity: int = 64) -> None:
+    def __init__(
+        self,
+        artifact: Path,
+        *,
+        capacity: int = 64,
+        nocache: bool = False,
+        trace_routes: bool = False,
+    ) -> None:
         if capacity < 1:
             raise ValueError("expert cache capacity must be positive")
         self.artifact = artifact.resolve()
@@ -72,10 +82,23 @@ class SynchronousExpertStore:
         self._validate_layout()
         self.capacity = capacity
         self._fd = os.open(self.artifact / "experts.pack", os.O_RDONLY)
+        if nocache:
+            fcntl.fcntl(self._fd, F_NOCACHE, 1)
+        self.nocache = nocache
+        self.trace_routes = trace_routes
         self._cache: OrderedDict[tuple[int, int], ExpertWeights] = OrderedDict()
         self.hits = 0
         self.misses = 0
         self.bytes_read = 0
+        self.read_ns = 0
+        self.materialize_ns = 0
+        self.router_wait_ns = 0
+        self.execute_ns = 0
+        self.layer_stats = [
+            {"hits": 0, "misses": 0, "read_ns": 0, "materialize_ns": 0}
+            for _ in range(self.layer_count)
+        ]
+        self.route_trace: list[dict[str, object]] = []
 
     def _validate_layout(self) -> None:
         expected = {
@@ -135,12 +158,15 @@ class SynchronousExpertStore:
 
     def _load(self, layer_id: int, expert_id: int) -> ExpertWeights:
         offset = self._record_offset(layer_id, expert_id)
+        read_started = time.perf_counter_ns()
         record = os.pread(self._fd, self.record_size, offset)
+        read_ns = time.perf_counter_ns() - read_started
         if len(record) != self.record_size:
             raise OSError(
                 f"short expert read for ({layer_id}, {expert_id}): "
                 f"{len(record)} != {self.record_size}"
             )
+        materialize_started = time.perf_counter_ns()
         arrays = {
             component.suffix: self._array(
                 memoryview(record)[
@@ -152,7 +178,12 @@ class SynchronousExpertStore:
             for component in self.components
         }
         mx.eval(*arrays.values())
+        materialize_ns = time.perf_counter_ns() - materialize_started
         self.bytes_read += self.record_size
+        self.read_ns += read_ns
+        self.materialize_ns += materialize_ns
+        self.layer_stats[layer_id]["read_ns"] += read_ns
+        self.layer_stats[layer_id]["materialize_ns"] += materialize_ns
         return ExpertWeights(
             gate_weight=arrays["gate_proj.weight"],
             gate_scales=arrays["gate_proj.scales"],
@@ -169,9 +200,11 @@ class SynchronousExpertStore:
         key = (layer_id, expert_id)
         if key in self._cache:
             self.hits += 1
+            self.layer_stats[layer_id]["hits"] += 1
             self._cache.move_to_end(key)
             return self._cache[key]
         self.misses += 1
+        self.layer_stats[layer_id]["misses"] += 1
         weights = self._load(layer_id, expert_id)
         self._cache[key] = weights
         if len(self._cache) > self.capacity:
@@ -193,8 +226,18 @@ class SynchronousExpertStore:
 
     def execute(self, layer_id: int, x: mx.array, indices: mx.array) -> mx.array:
         """Execute selected experts in the exact route order supplied by MLX."""
+        execute_started = time.perf_counter_ns()
+        wait_started = time.perf_counter_ns()
         mx.eval(indices)
+        self.router_wait_ns += time.perf_counter_ns() - wait_started
         host_indices = np.asarray(indices, dtype=np.int64)
+        if self.trace_routes:
+            self.route_trace.append(
+                {
+                    "layer_id": layer_id,
+                    "expert_ids": host_indices.reshape(-1, host_indices.shape[-1]).tolist(),
+                }
+            )
         flat_x = x.reshape(-1, x.shape[-1])
         flat_indices = host_indices.reshape(-1, host_indices.shape[-1])
         token_outputs: list[mx.array] = []
@@ -219,16 +262,36 @@ class SynchronousExpertStore:
                 route_outputs.append(down.squeeze(0))
             token_outputs.append(mx.stack(route_outputs, axis=0))
         output = mx.stack(token_outputs, axis=0)
+        self.execute_ns += time.perf_counter_ns() - execute_started
         return output.reshape(*indices.shape, x.shape[-1])
 
-    def stats(self) -> dict[str, int]:
+    def stats(self) -> dict[str, object]:
         return {
             "capacity": self.capacity,
+            "nocache": self.nocache,
             "resident": len(self._cache),
             "hits": self.hits,
             "misses": self.misses,
             "bytes_read": self.bytes_read,
+            "timing_seconds": {
+                "pread": self.read_ns / 1_000_000_000,
+                "materialize": self.materialize_ns / 1_000_000_000,
+                "router_and_graph_wait": self.router_wait_ns / 1_000_000_000,
+                "execute_total": self.execute_ns / 1_000_000_000,
+            },
+            "per_layer": [
+                {
+                    "hits": values["hits"],
+                    "misses": values["misses"],
+                    "read_seconds": values["read_ns"] / 1_000_000_000,
+                    "materialize_seconds": values["materialize_ns"] / 1_000_000_000,
+                }
+                for values in self.layer_stats
+            ],
         }
+
+    def trace(self) -> list[dict[str, object]]:
+        return list(self.route_trace)
 
 
 class StreamingSwitchGLU(nn.Module):

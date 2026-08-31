@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import statistics
 import time
+import json
 from pathlib import Path
 
 import mlx.core as mx
@@ -32,12 +33,17 @@ def generate_greedy(
     cache_capacity: int,
     chat_template: bool,
     enable_thinking: bool,
+    nocache: bool = False,
+    trace_output: Path | None = None,
 ) -> dict[str, object]:
     if max_tokens < 1:
         raise ValueError("max_tokens must be positive")
     load_started = time.perf_counter()
     model, tokenizer, store = load_streaming_qwen(
-        artifact, cache_capacity=cache_capacity
+        artifact,
+        cache_capacity=cache_capacity,
+        nocache=nocache,
+        trace_routes=trace_output is not None,
     )
     load_seconds = time.perf_counter() - load_started
     try:
@@ -75,7 +81,7 @@ def generate_greedy(
             mx.eval(logits)
             decode_latencies.append(time.perf_counter() - started)
 
-        return {
+        result = {
             "prompt": prompt,
             "chat_template": chat_template,
             "enable_thinking": enable_thinking,
@@ -97,5 +103,21 @@ def generate_greedy(
             "mlx_active_bytes": mx.get_active_memory(),
             "mlx_peak_bytes": mx.get_peak_memory(),
         }
+        if trace_output is not None:
+            trace_output.parent.mkdir(parents=True, exist_ok=True)
+            trace_output.write_text(
+                json.dumps(
+                    {
+                        "format": "vference.route-trace.v1",
+                        "artifact": str(artifact.resolve()),
+                        "prompt_tokens": len(prompt_tokens),
+                        "output_tokens": output_tokens,
+                        "records": store.trace(),
+                    },
+                    separators=(",", ":"),
+                )
+            )
+            result["trace_output"] = str(trace_output.resolve())
+        return result
     finally:
         store.close()

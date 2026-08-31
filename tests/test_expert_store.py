@@ -105,7 +105,8 @@ def test_streamed_experts_match_the_same_quantized_arrays(tmp_path: Path) -> Non
             np.asarray(actual.view(mx.uint16)),
             np.asarray(expected_array.view(mx.uint16)),
         )
-        assert store.stats() == {
+        stats = store.stats()
+        assert {key: stats[key] for key in ("capacity", "resident", "hits", "misses", "bytes_read")} == {
             "capacity": 1,
             "resident": 1,
             "hits": 0,

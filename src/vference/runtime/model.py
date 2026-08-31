@@ -13,13 +13,22 @@ from .expert_store import StreamingSwitchGLU, SynchronousExpertStore
 
 
 def load_streaming_qwen(
-    artifact: Path, *, cache_capacity: int = 64
+    artifact: Path,
+    *,
+    cache_capacity: int = 64,
+    nocache: bool = False,
+    trace_routes: bool = False,
 ) -> tuple[Model, object, SynchronousExpertStore]:
     """Load the resident text core and attach exact synchronous expert streaming."""
     artifact = artifact.resolve()
     config = json.loads((artifact / "config.json").read_text())
     model = Model(ModelArgs.from_dict(config))
-    store = SynchronousExpertStore(artifact, capacity=cache_capacity)
+    store = SynchronousExpertStore(
+        artifact,
+        capacity=cache_capacity,
+        nocache=nocache,
+        trace_routes=trace_routes,
+    )
     for layer_id, layer in enumerate(model.language_model.layers):
         layer.mlp.switch_mlp = StreamingSwitchGLU(layer_id, store)
     gc.collect()
