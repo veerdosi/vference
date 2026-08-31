@@ -720,13 +720,33 @@ decode produced the exact same 256 tokens. It measured 191.75 seconds prefill,
 MLX memory, and a -151 MB system swap delta. `pmset` reported no thermal or
 performance warning.
 
-This passes the provisional absolute throughput/no-swap gate **once**, but it
-is not the release result: the prompt is a synthetic stress sequence rather
-than a meaningful retrieval case, the optimized and synchronous 8K baselines
-have not yet been repeated for confidence intervals, and admission control is
-not yet enforced. The two memory policies produced identical token-list
-SHA-256 `f4b04a69f0bb425f65d7103580aedf78b786bc324b6c2100083314a9a76b88bd`.
-See `experiments/runtime/stage5-8k-feasibility-2026-09-01.json`.
+Three identical runs of the passing configuration measured 2.2812, 2.2767,
+and 2.2754 decode tok/s (mean 2.2778, sample standard deviation 0.0031,
+small-sample 95% t-interval 2.2702–2.2854). All produced identical token IDs,
+the same 2.903 GB peak MLX memory, negative swap deltas, and no thermal warning.
+The two memory policies also produced identical token-list SHA-256
+`f4b04a69f0bb425f65d7103580aedf78b786bc324b6c2100083314a9a76b88bd`.
+
+A deterministic retrieval probe then placed `ORCHID-7319` one quarter into a
+7,936-token context and asked for the code at the end. The response began
+exactly `ORCHID-7319`; prefill took 198.86 seconds, peak MLX memory was again
+2.903 GB, and swap decreased 50 MB. This is meaningful long-range state use,
+though still a synthetic regression rather than a broad quality corpus.
+
+The provisional absolute 8K throughput/no-swap gate is therefore repeatably
+met. Admission control now derives the exact Qwen cache allocation: 64,389,120
+fixed bytes for 30 DeltaNet layers plus 5,242,880 bytes for every 256-token KV
+allocation step across 10 attention layers. It adds current resident MLX bytes
+and a conservative chunk-transient reserve fitted above the measured 512- and
+2,048-token probes. The default budget is 37.5% of physical memory (3 GiB on
+this Mac). The passing configuration estimated 3,183,894,664 bytes and was
+admitted; the previously swap-heavy 640-slot 8K configuration estimated 3.49
+GiB and was rejected before prefill. The estimator exactly matched measured
+state allocations at 1, 513, and 8,192 tokens.
+
+Full release qualification still requires same-context baseline confidence,
+multi-turn handling, and the wider deterministic regression corpus. See
+`experiments/runtime/stage5-8k-feasibility-2026-09-01.json`.
 
 Only 3.13% of sorted within-layer selected-ID pairs were adjacent in the v1
 pack. Blindly reading the span between the minimum and maximum of eight routed
@@ -846,9 +866,11 @@ Implement expert-major chunked prefill, state reservation, context admission,
 and multi-turn correctness. Publish separate TTFT and decode profiles at 4K,
 8K, 16K, 32K, and the largest safely admitted context. **In progress:** exact
 working-set splitting, phase-specific cache policies, and allocator cleanup are
-implemented. One synthetic 8K-total/256-output run cleared the absolute
-throughput and no-swap gate. Admission control, exact state reservation,
-meaningful long-context correctness, and repeated confidence runs remain.
+implemented. One synthetic 8K-total/256-output workload cleared the absolute
+throughput and no-swap gate in three repetitions, and a separate 7,936-token
+needle-retrieval case passed. Exact Qwen state accounting and measured-profile
+admission are implemented. Multi-turn handling, same-context baseline
+confidence, and the broader correctness corpus remain.
 
 ### Stage 6 — quantization experiments
 

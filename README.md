@@ -60,6 +60,9 @@ uv run vference stream-generate artifacts/qwen3.5-35b-a3b-4bit-runtime \
   --prefill-chunk-size 512 --clear-cache-between-prefill-chunks --nocache
 ```
 
-This configuration has passed one synthetic 8K-total-token run at 2.281 decode
-tok/s without swap growth. It is not yet a release claim; repeated and
-meaningful long-context regressions remain.
+This configuration averaged 2.278 decode tok/s across three identical
+8K-total-token runs without swap growth, and a separate 7,936-token needle
+retrieval returned the expected code. Unsafe contexts are rejected against a
+measured memory model before prefill. It is not yet a release claim; multi-turn
+handling, same-context baseline confidence, and the broader correctness corpus
+remain.

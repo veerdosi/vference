@@ -73,8 +73,61 @@
     "output_token_sha256": "f4b04a69f0bb425f65d7103580aedf78b786bc324b6c2100083314a9a76b88bd",
     "tokens_exact_between_rejected_and_passing_memory_policies": true
   },
+  "passing_repetitions": {
+    "all_output_tokens_exact": true,
+    "decode_tokens_per_second": [
+      2.281233106223433,
+      2.276712520016265,
+      2.27538947778893
+    ],
+    "mean_decode_tokens_per_second": 2.2777783680095425,
+    "prefill_seconds": [
+      191.7485948749818,
+      191.97935137499007,
+      192.9915316250117
+    ],
+    "sample_standard_deviation": 0.003064151151414346,
+    "small_sample_95_percent_t_interval": [
+      2.270166594579525,
+      2.28539014143956
+    ],
+    "swap_delta_bytes": [
+      -150994944,
+      -51642368,
+      -16777216
+    ]
+  },
+  "meaningful_long_context_probe": {
+    "answer_begins_with_expected_needle": true,
+    "benchmark_commit": "2750ae7795e36adaf84ebed895dec6abd00f60cd",
+    "decode_tokens_per_second": 2.5180997860903798,
+    "description": "Needle inserted one quarter into 7936 prompt tokens and queried at the end",
+    "expected_needle": "ORCHID-7319",
+    "mlx_peak_bytes": 2903312538,
+    "output_text_prefix": " ORCHID-7319",
+    "prefill_seconds": 198.860070041992,
+    "system_swap_delta_bytes": -50331648
+  },
+  "admission_control": {
+    "commit": "bf25f4c862ddbfeb99ef12da43fe403176b089d1",
+    "default_budget_bytes": 3221225472,
+    "measured_unsafe_640_slot_estimated_peak_bytes": 3750125704,
+    "measured_unsafe_640_slot_rejected_before_prefill": true,
+    "passing_320_slot_estimate": {
+      "admitted": true,
+      "estimated_peak_bytes": 3183894664,
+      "model_state_bytes": 232161280,
+      "prefill_transient_reserve_bytes": 1006632960,
+      "resident_bytes": 1945100424
+    },
+    "state_estimator_matches_measured_allocations": {
+      "1_token_bytes": 69632000,
+      "513_token_bytes": 80117760,
+      "8192_token_bytes": 232161280
+    }
+  },
   "qualification": {
-    "provisional_2_tok_s_and_no_swap_gate": "passed once",
-    "release_gate": "not passed; requires repeated runs and meaningful long-context correctness/retrieval cases"
+    "provisional_2_tok_s_and_no_swap_gate": "passed in three identical sustained runs",
+    "release_gate": "not passed; same-context baseline confidence, multi-turn, and broader correctness corpus remain"
   }
 }
