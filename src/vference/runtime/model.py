@@ -23,6 +23,7 @@ def load_streaming_qwen(
     nocache: bool = False,
     trace_routes: bool = False,
     store_kind: str = "python",
+    cache_policy: str = "global",
 ) -> tuple[Model, object, SynchronousExpertStore]:
     """Load the resident text core and attach exact synchronous expert streaming."""
     artifact = artifact.resolve()
@@ -36,12 +37,16 @@ def load_streaming_qwen(
         store_type = store_types[store_kind]
     except KeyError as error:
         raise ValueError(f"unknown expert store: {store_kind}") from error
-    store = store_type(
-        artifact,
-        capacity=cache_capacity,
-        nocache=nocache,
-        trace_routes=trace_routes,
-    )
+    store_kwargs = {
+        "capacity": cache_capacity,
+        "nocache": nocache,
+        "trace_routes": trace_routes,
+    }
+    if store_kind == "stable":
+        store_kwargs["cache_policy"] = cache_policy
+    elif cache_policy != "global":
+        raise ValueError("the Python reference store only supports global LRU")
+    store = store_type(artifact, **store_kwargs)
     for layer_id, layer in enumerate(model.language_model.layers):
         layer.mlp.switch_mlp = StreamingSwitchGLU(layer_id, store)
     gc.collect()

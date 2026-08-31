@@ -311,6 +311,7 @@ class StableSlotExpertStore(SynchronousExpertStore):
         capacity: int = 64,
         nocache: bool = False,
         trace_routes: bool = False,
+        cache_policy: str = "global",
     ) -> None:
         if capacity < 1:
             raise ValueError("expert cache capacity must be positive")
@@ -340,6 +341,11 @@ class StableSlotExpertStore(SynchronousExpertStore):
         self.capacity = capacity
         self.nocache = nocache
         self.trace_routes = trace_routes
+        if cache_policy not in {"global", "layer"}:
+            raise ValueError(f"unknown stable cache policy: {cache_policy}")
+        if cache_policy == "layer" and capacity < self.layer_count:
+            raise ValueError("layer-partitioned cache needs at least one slot per layer")
+        self.cache_policy = cache_policy
 
         native = extension()
         self._native = native
@@ -363,6 +369,18 @@ class StableSlotExpertStore(SynchronousExpertStore):
             component.bytes_per_expert for component in self.components
         ]
         self._free_slots = list(range(capacity - 1, -1, -1))
+        self._free_slots_by_layer: dict[int, list[int]] = {}
+        self._layer_capacities: dict[int, int] = {}
+        if cache_policy == "layer":
+            base, extra = divmod(capacity, self.layer_count)
+            start = 0
+            for ordinal, layer_id in enumerate(self.layer_ids):
+                count = base + (ordinal < extra)
+                self._layer_capacities[layer_id] = count
+                self._free_slots_by_layer[layer_id] = list(
+                    range(start + count - 1, start - 1, -1)
+                )
+                start += count
         self._cache: OrderedDict[tuple[int, int], int] = OrderedDict()
         self._slot_keys: list[tuple[int, int] | None] = [None] * capacity
 
@@ -395,6 +413,19 @@ class StableSlotExpertStore(SynchronousExpertStore):
     def _allocate_slot(
         self, key: tuple[int, int], protected: set[tuple[int, int]]
     ) -> int:
+        if self.cache_policy == "layer":
+            free_slots = self._free_slots_by_layer[key[0]]
+            if free_slots:
+                return free_slots.pop()
+            for victim, slot in self._cache.items():
+                if victim[0] == key[0] and victim not in protected:
+                    del self._cache[victim]
+                    self._slot_keys[slot] = None
+                    return slot
+            raise RuntimeError(
+                "layer cache partition is smaller than the simultaneously "
+                "requested expert working set"
+            )
         if self._free_slots:
             return self._free_slots.pop()
         for victim, slot in self._cache.items():
@@ -441,7 +472,12 @@ class StableSlotExpertStore(SynchronousExpertStore):
             (layer_id, int(expert_id)) for expert_id in host_indices.reshape(-1)
         ]
         protected = set(requested)
-        if len(protected) > self.capacity:
+        available = self.capacity
+        if self.cache_policy == "layer":
+            available = len(self._free_slots_by_layer[layer_id]) + sum(
+                key[0] == layer_id for key in self._cache
+            )
+        if len(protected) > available:
             raise RuntimeError(
                 "stable expert capacity is smaller than the simultaneously requested "
                 "working set"
@@ -502,29 +538,47 @@ class StableSlotExpertStore(SynchronousExpertStore):
             )
 
         unique_count = len(set(int(value) for value in host_indices.reshape(-1)))
-        if unique_count <= self.capacity:
+        working_capacity = self._layer_capacities.get(layer_id, self.capacity)
+        if unique_count <= working_capacity:
             local = mx.array(self._resolve_slots(layer_id, host_indices))
             output = self._execute_loaded(x, local)
         else:
             flat_x = x.reshape(-1, x.shape[-1])
             flat_indices = host_indices.reshape(-1, host_indices.shape[-1])
-            token_outputs = []
-            for token_id, token_indices in enumerate(flat_indices):
-                local_host = token_indices.reshape(1, 1, -1)
+            grouped_outputs = []
+            start = 0
+            while start < len(flat_indices):
+                selected: set[int] = set()
+                end = start
+                while end < len(flat_indices):
+                    candidate = selected | set(int(value) for value in flat_indices[end])
+                    if len(candidate) > working_capacity:
+                        break
+                    selected = candidate
+                    end += 1
+                if end == start:
+                    raise RuntimeError(
+                        "cache partition cannot hold one token's exact routed experts"
+                    )
+                local_host = flat_indices[start:end].reshape(1, end - start, -1)
                 local = mx.array(self._resolve_slots(layer_id, local_host))
-                token_output = self._execute_loaded(
-                    flat_x[token_id].reshape(1, 1, -1), local
+                group_output = self._execute_loaded(
+                    flat_x[start:end].reshape(1, end - start, -1), local
                 )
-                # The next token may overwrite these slots, so settle this graph first.
-                mx.eval(token_output)
-                token_outputs.append(token_output.reshape(-1, x.shape[-1]))
-            output = mx.stack(token_outputs).reshape(*indices.shape, x.shape[-1])
+                # The next group may overwrite these slots, so settle this graph first.
+                mx.eval(group_output)
+                grouped_outputs.append(group_output.reshape(-1, x.shape[-1]))
+                start = end
+            output = mx.concatenate(grouped_outputs, axis=0).reshape(
+                *indices.shape, x.shape[-1]
+            )
         self.execute_ns += time.perf_counter_ns() - execute_started
         return output
 
     def stats(self) -> dict[str, object]:
         values = super().stats()
         values["implementation"] = "stable_native_slots"
+        values["cache_policy"] = self.cache_policy
         return values
 
     def pool_pointers(self) -> dict[str, int]:

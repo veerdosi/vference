@@ -194,16 +194,25 @@ def test_stable_slots_match_math_and_keep_addresses(tmp_path: Path) -> None:
         mx.eval(first)
         second = stable.execute(0, x, mx.array([[[2, 0]]], dtype=mx.int32))
         mx.eval(second)
+        batch_x = mx.concatenate([x, x], axis=1)
+        batch_indices = mx.array([[[0, 1], [2, 0]]], dtype=mx.int32)
+        split_batch = stable.execute(0, batch_x, batch_indices)
+        mx.eval(split_batch)
         assert stable.pool_pointers() == pointers
 
     with SynchronousExpertStore(tmp_path, capacity=2) as reference:
         expected_first = reference.execute(0, x, mx.array([[[0, 1]]], dtype=mx.int32))
         expected_second = reference.execute(0, x, mx.array([[[2, 0]]], dtype=mx.int32))
-        mx.eval(expected_first, expected_second)
+        expected_batch = reference.execute(0, batch_x, batch_indices)
+        mx.eval(expected_first, expected_second, expected_batch)
 
     assert np.array_equal(
         np.asarray(first.view(mx.uint16)), np.asarray(expected_first.view(mx.uint16))
     )
     assert np.array_equal(
         np.asarray(second.view(mx.uint16)), np.asarray(expected_second.view(mx.uint16))
+    )
+    assert np.array_equal(
+        np.asarray(split_batch.view(mx.uint16)),
+        np.asarray(expected_batch.view(mx.uint16)),
     )

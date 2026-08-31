@@ -38,9 +38,16 @@ def generate_greedy(
     nocache: bool = False,
     trace_output: Path | None = None,
     store_kind: str = "python",
+    prefill_chunk_size: int = 1,
+    repeat_raw_prompt_to_tokens: int | None = None,
+    cache_policy: str = "global",
 ) -> dict[str, object]:
     if max_tokens < 1:
         raise ValueError("max_tokens must be positive")
+    if prefill_chunk_size < 1:
+        raise ValueError("prefill chunk size must be positive")
+    if repeat_raw_prompt_to_tokens is not None and repeat_raw_prompt_to_tokens < 1:
+        raise ValueError("repeated raw prompt token count must be positive")
     process = psutil.Process()
     rss_before = process.memory_info().rss
     swap_before = psutil.swap_memory().used
@@ -51,10 +58,21 @@ def generate_greedy(
         nocache=nocache,
         trace_routes=trace_output is not None,
         store_kind=store_kind,
+        cache_policy=cache_policy,
     )
     load_seconds = time.perf_counter() - load_started
     try:
-        if chat_template:
+        prompt_mode = "chat" if chat_template else "raw"
+        if repeat_raw_prompt_to_tokens is not None:
+            base_tokens = tokenizer.encode(prompt, add_special_tokens=False)
+            if not base_tokens:
+                raise ValueError("prompt encoded to zero tokens")
+            repetitions = (
+                repeat_raw_prompt_to_tokens + len(base_tokens) - 1
+            ) // len(base_tokens)
+            prompt_tokens = (base_tokens * repetitions)[:repeat_raw_prompt_to_tokens]
+            prompt_mode = "synthetic_repeated_raw_tokens"
+        elif chat_template:
             prompt_tokens = tokenizer.apply_chat_template(
                 [{"role": "user", "content": prompt}],
                 add_generation_prompt=True,
@@ -69,8 +87,9 @@ def generate_greedy(
         cache = model.make_cache()
         prefill_started = time.perf_counter()
         logits = None
-        for token_id in prompt_tokens:
-            logits = model(mx.array([[token_id]]), cache=cache)
+        for start in range(0, len(prompt_tokens), prefill_chunk_size):
+            chunk = prompt_tokens[start : start + prefill_chunk_size]
+            logits = model(mx.array([chunk]), cache=cache)
             mx.eval(logits)
         prefill_seconds = time.perf_counter() - prefill_started
 
@@ -92,9 +111,12 @@ def generate_greedy(
         result = {
             "prompt": prompt,
             "chat_template": chat_template,
+            "prompt_mode": prompt_mode,
             "enable_thinking": enable_thinking,
             "store_kind": store_kind,
+            "cache_policy": cache_policy,
             "prompt_tokens": len(prompt_tokens),
+            "prefill_chunk_size": prefill_chunk_size,
             "output_tokens": output_tokens,
             "output_text": tokenizer.decode(output_tokens),
             "load_seconds": load_seconds,
@@ -130,6 +152,7 @@ def generate_greedy(
                         "format": "vference.route-trace.v1",
                         "artifact": str(artifact.resolve()),
                         "prompt_tokens": len(prompt_tokens),
+                        "prompt_mode": prompt_mode,
                         "output_tokens": output_tokens,
                         "records": store.trace(),
                     },
