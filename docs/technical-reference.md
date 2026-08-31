@@ -573,6 +573,42 @@ and order. Quantized/custom fused kernels may require tight dtype-aware numeric
 tolerances, followed by exact greedy-token equality over long generations.
 Tolerance alone is insufficient if token sequences diverge.
 
+#### Stage 2 evidence on the target (local measurement, 2026-09-01 SGT)
+
+The correctness-first Python path now replaces only `switch_mlp`; upstream MLX
+still computes router softmax, exact top-8 IDs and scores, shared-expert output,
+route-weighted reduction, and layer order. The store blocks on exact records and
+performs no prediction, substitution, or top-K change.
+
+Two real-weight expert-operation oracles passed bit-for-bit against MLX
+`gather_qmm` using slices read independently from the source checkpoint:
+layer 0 with expert IDs 0–7, and layer 17 with shuffled IDs
+`[255, 17, 203, 42, 99, 0, 128, 7]`. Each compared 16,384 BF16 output elements;
+both maximum and mean absolute error were zero. The synthetic forced-eviction
+unit test is also bit-exact.
+
+Loading the resident core alone measured 1,378,869,384 MLX active bytes and did
+not read or materialize any expert records. A one-token, eight-slot forced-miss
+forward used all 320 exact expert routes, read 566,231,040 logical bytes, peaked
+at 1,464,980,934 MLX bytes, and completed in 1.83 seconds including first-use
+costs.
+
+A subsequent short warm chat smoke run with a 320-record cache and thinking
+disabled generated `Hello from vference!<|im_end|>` for the instruction to
+reply with exactly that phrase. It measured 2.40 decode model calls/s over only
+five calls, 2,038 expert-cache hits, 6,282 misses, and 2,018,563,520 peak MLX
+bytes. This proves end-to-end operation but is **not** the acceptance result: it
+used a 21-token prompt, buffered reads, and too few output tokens to establish
+sustained speed, 8K state behavior, thermal stability, or physical bytes/token.
+The detailed record is `experiments/runtime/stage2-smoke-2026-09-01.json`.
+
+Attempting to evaluate an entire original 256-expert stacked layer directly
+from the external source shard produced a Metal command-buffer GPU timeout on
+the 8 GB machine. The successful oracle instead reads the selected source
+slices into a small resident stacked reference before calling `gather_qmm`.
+This failed attempt is retained in the correctness experiment record and is
+further evidence that ordinary full-layer faulting is not a viable runtime.
+
 ### 8.3 Runtime release gates
 
 A storage/scheduler change is releasable only if:

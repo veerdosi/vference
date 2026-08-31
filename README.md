@@ -6,7 +6,9 @@ Qwen3.5-35B-A3B on an 8 GB M2 MacBook Air is the first architecture adapter and
 validation target, not the intended permanent scope.
 
 The project has completed the lossless Stage 1 artifact build and internal-SSD
-storage baseline; correctness-first streamed execution is next. Start with
+storage baseline. The Stage 2 synchronous Python path now loads the 1.38 GB
+resident core, streams exact experts, and generates with Qwen; sustained
+correctness and performance qualification remain in progress. Start with
 [the technical reference](docs/technical-reference.md). It records the model
 facts, memory and I/O arithmetic, proposed runtime architecture, quality
 invariants, validation gates, risks, and staged implementation plan.

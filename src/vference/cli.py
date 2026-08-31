@@ -10,6 +10,7 @@ from .artifacts.safetensors import classify_tensor, scan_model
 from .bench.storage import probe_storage
 from .experiments import append_record, make_record
 from .runtime.verify import verify_real_layer_math
+from .runtime.generate import generate_greedy
 from .system import mount_info, print_json
 
 
@@ -107,6 +108,19 @@ def _expert_math_verify(args: argparse.Namespace) -> None:
         raise SystemExit(1)
 
 
+def _stream_generate(args: argparse.Namespace) -> None:
+    print_json(
+        generate_greedy(
+            args.artifact,
+            args.prompt,
+            max_tokens=args.max_tokens,
+            cache_capacity=args.cache_capacity,
+            chat_template=not args.raw_prompt,
+            enable_thinking=args.thinking,
+        )
+    )
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="vference")
     commands = parser.add_subparsers(required=True)
@@ -133,6 +147,15 @@ def build_parser() -> argparse.ArgumentParser:
     math_parser.add_argument("--experts", type=int, nargs="+", default=list(range(8)))
     math_parser.add_argument("--seed", type=int, default=20260901)
     math_parser.set_defaults(func=_expert_math_verify)
+
+    generate_parser = commands.add_parser("stream-generate")
+    generate_parser.add_argument("artifact", type=Path)
+    generate_parser.add_argument("--prompt", required=True)
+    generate_parser.add_argument("--max-tokens", type=int, default=16)
+    generate_parser.add_argument("--cache-capacity", type=int, default=64)
+    generate_parser.add_argument("--raw-prompt", action="store_true")
+    generate_parser.add_argument("--thinking", action="store_true")
+    generate_parser.set_defaults(func=_stream_generate)
 
     storage_parser = commands.add_parser("storage-probe")
     storage_parser.add_argument("file", type=Path)

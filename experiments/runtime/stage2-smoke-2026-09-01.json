@@ -1,0 +1,40 @@
+{
+  "artifact_sha256": "9b26ebdf13a2863d607e1c3ea6e2528ff0267b7f472f8fd37fd20d3adb497e18",
+  "cache_capacity_records": 320,
+  "chat_template": true,
+  "date_local": "2026-09-01",
+  "decode_latency_seconds": {
+    "max": 0.45742537500336766,
+    "mean": 0.4170152748003602,
+    "p50": 0.4063247079902794,
+    "p95": 0.45742537500336766
+  },
+  "decode_model_calls": 5,
+  "decode_tokens_per_second": 2.3979936957434833,
+  "enable_thinking": false,
+  "expert_store": {
+    "bytes_read": 11115823104,
+    "hits": 2038,
+    "misses": 6282,
+    "resident": 320
+  },
+  "limitations": [
+    "Short warm smoke test, not a sustained throughput claim.",
+    "Prompt context was 21 tokens, not the provisional 8K acceptance context.",
+    "Buffered reads do not distinguish physical SSD bytes from filesystem-cache hits.",
+    "No fully resident same-artifact token oracle was available on the 8 GB target."
+  ],
+  "load_seconds": 1.9547349159838632,
+  "machine": {
+    "chip": "Apple M2",
+    "memory_bytes": 8589934592,
+    "model": "Mac14,2"
+  },
+  "mlx_active_bytes": 2016223370,
+  "mlx_peak_bytes": 2018563520,
+  "output_text": "Hello from vference!<|im_end|>",
+  "output_token_ids": [9419, 494, 343, 2133, 0, 248046],
+  "prefill_seconds": 8.88702004100196,
+  "prompt": "Reply with exactly: Hello from vference!",
+  "prompt_tokens": 21
+}
