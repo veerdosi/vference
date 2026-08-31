@@ -42,6 +42,7 @@ def generate_greedy(
     repeat_raw_prompt_to_tokens: int | None = None,
     cache_policy: str = "global",
     decode_cache_policy: str | None = None,
+    clear_cache_between_prefill_chunks: bool = False,
 ) -> dict[str, object]:
     if max_tokens < 1:
         raise ValueError("max_tokens must be positive")
@@ -88,10 +89,21 @@ def generate_greedy(
         cache = model.make_cache()
         prefill_started = time.perf_counter()
         logits = None
+        prefill_chunks: list[dict[str, int]] = []
         for start in range(0, len(prompt_tokens), prefill_chunk_size):
             chunk = prompt_tokens[start : start + prefill_chunk_size]
             logits = model(mx.array([chunk]), cache=cache)
             mx.eval(logits)
+            chunk_memory = {
+                "start_token": start,
+                "token_count": len(chunk),
+                "active_bytes": mx.get_active_memory(),
+                "cache_bytes_before_clear": mx.get_cache_memory(),
+            }
+            if clear_cache_between_prefill_chunks:
+                mx.clear_cache()
+            chunk_memory["cache_bytes_after_clear"] = mx.get_cache_memory()
+            prefill_chunks.append(chunk_memory)
         prefill_seconds = time.perf_counter() - prefill_started
 
         if decode_cache_policy is not None and decode_cache_policy != cache_policy:
@@ -124,6 +136,8 @@ def generate_greedy(
             "decode_cache_policy": decode_cache_policy or cache_policy,
             "prompt_tokens": len(prompt_tokens),
             "prefill_chunk_size": prefill_chunk_size,
+            "clear_cache_between_prefill_chunks": clear_cache_between_prefill_chunks,
+            "prefill_chunk_memory": prefill_chunks,
             "output_tokens": output_tokens,
             "output_text": tokenizer.decode(output_tokens),
             "load_seconds": load_seconds,
@@ -140,6 +154,7 @@ def generate_greedy(
             "expert_store": store.stats(),
             "mlx_active_bytes": mx.get_active_memory(),
             "mlx_peak_bytes": mx.get_peak_memory(),
+            "mlx_cache_bytes": mx.get_cache_memory(),
             "process_rss_bytes": {
                 "before_load": rss_before,
                 "after_generation": process.memory_info().rss,

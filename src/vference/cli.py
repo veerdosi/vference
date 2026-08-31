@@ -126,6 +126,7 @@ def _stream_generate(args: argparse.Namespace) -> None:
             repeat_raw_prompt_to_tokens=args.repeat_raw_prompt_to_tokens,
             cache_policy=args.cache_policy,
             decode_cache_policy=args.decode_cache_policy,
+            clear_cache_between_prefill_chunks=args.clear_cache_between_prefill_chunks,
         )
     )
 
@@ -182,6 +183,7 @@ def build_parser() -> argparse.ArgumentParser:
     generate_parser.add_argument("--repeat-raw-prompt-to-tokens", type=int)
     generate_parser.add_argument("--cache-policy", choices=("global", "layer"), default="global")
     generate_parser.add_argument("--decode-cache-policy", choices=("global", "layer"))
+    generate_parser.add_argument("--clear-cache-between-prefill-chunks", action="store_true")
     generate_parser.set_defaults(func=_stream_generate)
 
     replay_parser = commands.add_parser("route-replay")
