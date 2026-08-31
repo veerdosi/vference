@@ -341,10 +341,20 @@ slot policy. Benchmark at least:
 - read-only mapping plus `MADV_RANDOM`/`WILLNEED`/`DONTNEED`.
 
 Apple recommends aligned buffers for uncached reads and documents mapped I/O
-for random access. The best choice must be measured on the actual internal SSD,
-including cold cache, warm cache, random record reads, coalesced reads, and
-sustained thermal behavior. Do not use advertised sequential bandwidth as the
+for random access. The best I/O method and artifact placement must be measured
+on both the internal SSD and the attached external SSD, including cold cache,
+warm cache, expert-sized random reads, coalesced reads, sustained reads, and
+end-to-end expert stall time. Do not use advertised sequential bandwidth as the
 runtime model.
+
+Storage placement is a policy decision, not a fixed architecture rule. The
+selected result may be external-only, internal-only, or hybrid: for example,
+the source/cold expert pack may remain external while a bounded hot or repacked
+artifact lives internally. Compare physical bytes, latency distributions,
+thermal stability, interface limits, filesystem cache behavior, and memory
+pressure before choosing. Internal free space is itself a budget; benchmarks
+may use a temporary representative shard, but must not copy the full model or
+retain redundant artifacts without a measured benefit.
 
 Track physical/read-request bytes separately from logical expert bytes. A cache
 hit has zero expert-file I/O; a correct speculative prefetch that is later
@@ -623,7 +633,7 @@ functional if no ANE candidate wins.
 | ------------------------------------------------ | ----------------------------------------------------------------- | --------------------------------------------------------------------- |
 | Non-routed trunk/temporaries leave too few slots | Measure peak with core-only forward and reserved state            | Stronger trunk quantization, shorter context, or target is infeasible |
 | Routing has poor cacheability                    | Record diverse Qwen3.5 traces; replay capacities/policies         | Throughput becomes SSD-bound; prediction cannot manufacture locality  |
-| SSD cannot sustain required small reads          | Cold/warm aligned record benchmark over minutes                   | Repack/coalesce or accept a hard throughput ceiling                   |
+| Storage path cannot sustain required small reads | Compare cold/warm expert, coalesced, sustained, and stall measurements on internal/external paths | Repack, choose internal/external/hybrid placement, or identify the interface/hardware ceiling |
 | Router synchronization serializes pipeline       | Instruments per-layer eval/sync and native fused route submission | Integrate routing/demand notification deeper into native MLX seam     |
 | MLX allocator duplicates/retains slot data       | Compare slot bytes, active/peak memory, RSS over long decode      | Native stable buffers and strict cache-limit management required      |
 | Prefill touches most experts                     | Measure union by chunk/prompt and TTFT bytes                      | Dedicated expert-major prefill is mandatory                           |
