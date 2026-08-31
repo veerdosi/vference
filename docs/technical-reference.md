@@ -684,6 +684,28 @@ unoverlapped reads—not MLX-array construction—as the next exposed bottleneck
 The complete reproducible record is
 `experiments/runtime/stage3-stable-slots-2026-09-01.json`.
 
+An exact trace replay then showed that dividing 640 slots evenly into 16 slots
+per MoE layer should raise hit rate from 48.2% to 51.5%, because a global LRU
+otherwise lets traversal of later layers displace the earlier layers' working
+sets. The live run matched the replay exactly: 47,802 hits, 44,998 misses, and
+79.62 GB read. It sustained 3.262 tok/s with 301 ms median and 407 ms p95
+latency, 2.590 GB peak MLX memory, no observed swap growth, and all 256 output
+tokens unchanged. This is 35.9% faster than the original capacity-320 Python
+baseline and 7.1% faster than the 1,024-slot global native cache while using
+680 MB fewer expert slots. The layer-partitioned 640-slot policy is therefore
+the current best short-context decode configuration, subject to the 8K memory
+gate. See `experiments/runtime/stage3-layer-partition-2026-09-01.json`.
+
+Bounded prefill is now explicit. When a chunk routes to more unique experts
+than its cache or per-layer partition can hold, the runtime divides consecutive
+tokens into maximal groups whose exact expert union fits, evaluates each group
+before slot reuse, and concatenates the outputs in original order. A 35-token
+chunk-size-32 regression preserved all greedy tokens and reduced prefill from
+14.96 to 6.95 seconds. A separate synthetic 512-token, single-chunk stress
+probe completed in 14.00 seconds with 2.568 GB peak MLX memory and no observed
+swap growth. These are feasibility measurements, not the required meaningful
+8K retrieval/quality evaluation.
+
 Only 3.13% of sorted within-layer selected-ID pairs were adjacent in the v1
 pack. Blindly reading the span between the minimum and maximum of eight routed
 IDs would therefore amplify I/O; coalescing must operate on genuinely adjacent
@@ -800,7 +822,9 @@ memory above budget or changing outputs. Keep a no-prefetch baseline in CI.
 
 Implement expert-major chunked prefill, state reservation, context admission,
 and multi-turn correctness. Publish separate TTFT and decode profiles at 4K,
-8K, 16K, 32K, and the largest safely admitted context.
+8K, 16K, 32K, and the largest safely admitted context. **In progress:** exact
+working-set splitting and configurable chunks are implemented; admission
+control, exact state reservation, and the full 8K/256-token gate remain.
 
 ### Stage 6 — quantization experiments
 

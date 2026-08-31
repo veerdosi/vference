@@ -1,0 +1,84 @@
+{
+  "artifact_sha256": "9b26ebdf13a2863d607e1c3ea6e2528ff0267b7f472f8fd37fd20d3adb497e18",
+  "benchmark_commit": "209996dcb0d31dfbc1ca83ccc20be13cfb73ddb9",
+  "cache_state": "F_NOCACHE expert file; explicit stable-slot cache starts empty",
+  "date_local": "2026-09-01",
+  "dependencies": {
+    "mlx": "0.32.2",
+    "mlx-lm": "0.31.3",
+    "nanobind": "2.15.0"
+  },
+  "hardware": {
+    "chip": "Apple M2",
+    "memory_bytes": 8589934592,
+    "model": "Mac14,2",
+    "power": "AC power; battery charging",
+    "thermal_status_after_run": "No thermal or performance warning recorded by pmset"
+  },
+  "model": {
+    "repository": "mlx-community/Qwen3.5-35B-A3B-4bit",
+    "revision": "1e20fd8d42056f870933bf98ca6211024744f7ec"
+  },
+  "operating_system": {
+    "build": "25G83",
+    "version": "macOS 26.6.2"
+  },
+  "policy": {
+    "description": "640 stable slots divided equally into 16-slot per-layer LRU partitions; every current route is protected during victim selection",
+    "offline_trace_prediction": {
+      "bytes_read": 79622701056,
+      "hits": 47802,
+      "misses": 44998
+    }
+  },
+  "prompt": {
+    "chat_template": true,
+    "enable_thinking": false,
+    "text": "Write a detailed technical essay of at least 1500 words explaining sparse mixture-of-experts inference systems.",
+    "tokens": 35
+  },
+  "run": {
+    "cache_capacity_bytes": 1132462080,
+    "cache_capacity_records": 640,
+    "decode_calls": 255,
+    "decode_latency_seconds": {
+      "max": 0.4642628339934163,
+      "mean": 0.3065227640710552,
+      "p50": 0.30085354202310555,
+      "p95": 0.406888458004687
+    },
+    "decode_tokens_per_second": 3.2624004387752077,
+    "expert_store": {
+      "bytes_read": 79622701056,
+      "execute_seconds": 85.194793247,
+      "hits": 47802,
+      "materialize_seconds": 0.0,
+      "misses": 44998,
+      "preadv_seconds": 56.898400291,
+      "router_and_graph_wait_seconds": 26.932498984
+    },
+    "mlx_peak_bytes": 2589537896,
+    "output_tokens": 256,
+    "prefill_chunk_size": 1,
+    "prefill_seconds": 10.796248291997472,
+    "process_rss_high_water_bytes": 2076524544,
+    "system_swap_delta_bytes": -16777216
+  },
+  "bounded_prefill_probe": {
+    "cache_capacity_records": 320,
+    "cache_policy": "global",
+    "description": "Synthetic repeated raw-token stress probe; not a quality or retrieval test",
+    "expert_bytes_read": 10455810048,
+    "mlx_peak_bytes": 2567731338,
+    "prefill_chunk_size": 512,
+    "prefill_seconds": 14.00014316700981,
+    "prompt_tokens": 512,
+    "system_swap_delta_bytes": 0
+  },
+  "verification": {
+    "greedy_output_tokens_equal_to_stage2_reference": true,
+    "offline_prediction_matches_live_hits_misses_and_bytes": true,
+    "output_token_sha256": "e3a136ca3c3eb2c71a59d6df4a6829a6ec58c3f1ad7be35ea482b1200315aaa4",
+    "split_working_set_synthetic_test_bit_exact": true
+  }
+}

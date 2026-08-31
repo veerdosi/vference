@@ -38,5 +38,14 @@ make -C native build
 ```
 
 The reference and native paths can then be selected explicitly with
-`vference stream-generate ... --store python` and `--store stable`. The stable
-path remains opt-in until its sustained acceptance run is recorded.
+`vference stream-generate ... --store python` and `--store stable`. The current
+best qualified short-context decode configuration is:
+
+```sh
+uv run vference stream-generate artifacts/qwen3.5-35b-a3b-4bit-runtime \
+  --prompt 'Hello' --max-tokens 64 --store stable \
+  --cache-capacity 640 --cache-policy layer --prefill-chunk-size 32 --nocache
+```
+
+It remains experimental until the 8K context memory and reliability gate
+passes.
