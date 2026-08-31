@@ -25,12 +25,25 @@ def git_state(repo: Path) -> dict[str, Any]:
 
 
 def mount_info(path: Path) -> dict[str, Any]:
+    resolved = path.resolve()
+    target_device = resolved.stat().st_dev
+    candidates: list[Path] = []
+    for partition in psutil.disk_partitions(all=True):
+        mount = Path(partition.mountpoint)
+        try:
+            if mount.stat().st_dev == target_device:
+                candidates.append(mount)
+        except OSError:
+            continue
+    if not candidates:
+        raise ValueError(f"cannot resolve mount point for {path}")
+    mount_point = max(candidates, key=lambda item: len(item.parts))
     payload = subprocess.check_output(
-        ["diskutil", "info", "-plist", str(path)], stderr=subprocess.DEVNULL
+        ["diskutil", "info", "-plist", str(mount_point)], stderr=subprocess.DEVNULL
     )
     info = plistlib.loads(payload)
     return {
-        "path": str(path.resolve()),
+        "path": str(resolved),
         "mount_point": info.get("MountPoint"),
         "device": info.get("DeviceNode"),
         "filesystem": info.get("FilesystemType"),
@@ -38,7 +51,7 @@ def mount_info(path: Path) -> dict[str, Any]:
         "internal": info.get("Internal"),
         "solid_state": info.get("SolidState"),
         "volume_total_bytes": info.get("TotalSize"),
-        "volume_free_bytes": info.get("FreeSpace"),
+        "volume_free_bytes": info.get("APFSContainerFree") or info.get("FreeSpace"),
     }
 
 
