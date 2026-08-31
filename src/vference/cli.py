@@ -8,6 +8,7 @@ from pathlib import Path
 from .artifacts.builder import build_qwen35_artifact, verify_qwen35_artifact
 from .artifacts.safetensors import classify_tensor, scan_model
 from .bench.storage import probe_storage
+from .bench.cache import replay_trace
 from .experiments import append_record, make_record
 from .runtime.verify import verify_real_layer_math
 from .runtime.generate import generate_greedy
@@ -123,6 +124,16 @@ def _stream_generate(args: argparse.Namespace) -> None:
     )
 
 
+def _route_replay(args: argparse.Namespace) -> None:
+    print_json(
+        replay_trace(
+            args.trace,
+            capacities=tuple(args.capacities),
+            record_size=args.record_size,
+        )
+    )
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="vference")
     commands = parser.add_subparsers(required=True)
@@ -160,6 +171,14 @@ def build_parser() -> argparse.ArgumentParser:
     generate_parser.add_argument("--nocache", action="store_true")
     generate_parser.add_argument("--trace-output", type=Path)
     generate_parser.set_defaults(func=_stream_generate)
+
+    replay_parser = commands.add_parser("route-replay")
+    replay_parser.add_argument("trace", type=Path)
+    replay_parser.add_argument(
+        "--capacities", type=int, nargs="+", default=[8, 64, 160, 320, 640, 1024]
+    )
+    replay_parser.add_argument("--record-size", type=int, default=1_769_472)
+    replay_parser.set_defaults(func=_route_replay)
 
     storage_parser = commands.add_parser("storage-probe")
     storage_parser.add_argument("file", type=Path)
