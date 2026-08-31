@@ -206,6 +206,27 @@ FP32 (`30 * 32 * 128 * 128 * 4` bytes), plus small convolution state.
 Consequently, context length is a configured memory contract. Native 262K
 support does not mean 262K is feasible on the 8 GB target.
 
+### 3.3 Pinned 4-bit runtime artifact (local measurement, 2026-09-01 SGT)
+
+Stage 1 converted source revision
+`1e20fd8d42056f870933bf98ca6211024744f7ec` into the text-only
+`vference.runtime-model.v1` artifact on the target machine. The converter
+excluded the vision tower without changing any retained tensor payload.
+
+| Region | Tensors/records | Payload/file bytes |
+| --- | ---: | ---: |
+| Text core payload | 1,397 tensors | 1,378,869,376 |
+| `core.safetensors` including header | 1 file | 1,379,054,296 |
+| Routed experts | 360 stacked source tensors / 10,240 records | 18,119,393,280 |
+| One expert record | 9 quantized components | 1,769,472 |
+
+The expert record is exactly 432 4-KiB blocks and contains the existing affine
+4-bit weights, BF16 scales, and BF16 biases without requantization. A full
+independent verification reread the source, reconstructed every stacked expert
+tensor from all 10,240 records, checked all 1,757 retained source tensors, and
+reported zero failures. The pack SHA-256 is
+`9b26ebdf13a2863d607e1c3ea6e2528ff0267b7f472f8fd37fd20d3adb497e18`.
+
 ## 4. Upstream MLX behavior and required seam
 
 MLX is a strong base because it uses unified memory, lazy evaluation, dynamic
@@ -273,6 +294,16 @@ conversion itself never requires the whole model in memory.
 config hash, tokenizer hash, tensor inventory, quantization mode/group size per
 tensor class, byte order, alignment, converter version, and output hashes.
 Preparation fails closed on any unknown/missing tensor.
+
+Format v1 is now implemented for the Qwen3.5 adapter. Records are ordered by
+layer, then expert ID. Within a record, gate/up/down weight, scale, and bias
+components have fixed indexed offsets. Conversion reads each stacked source
+tensor sequentially and writes expert slices directly to their final offsets,
+so it does not create a source-shard copy or hold a layer in memory. Output is
+built under a `.partial` name and atomically published only after the core,
+pack, index, support files, tensor digests, and whole-file hashes complete. The
+builder refuses internal placement if the estimated completed artifact would
+leave less than 30 GiB free.
 
 ### 5.2 Memory controller
 
@@ -365,6 +396,34 @@ The storage policy for the current machine is:
 The already-measured USB2 result remains in experiment history because failed
 or ruled-out approaches are evidence, not because it is the selected runtime
 path.
+
+#### Target internal-SSD measurement (2026-09-01 SGT)
+
+These measurements used the verified 18,119,393,280-byte `experts.pack` above,
+not a synthetic file or copied source shard. Hardware was Mac14,2, Apple M2,
+8 GiB RAM, internal APFS `/dev/disk3s5` over Apple Fabric, macOS 26.6.2. Each
+result is recorded in `experiments/results.jsonl` at Git commit `3068cbf` with
+the pack SHA-256 and free-space snapshot.
+
+| Access pattern | Mode | Total read | Throughput | p50 / p95 request latency |
+| --- | --- | ---: | ---: | ---: |
+| 512 random one-expert reads (1,769,472 B) | `F_NOCACHE` | 905,969,664 B | 1.451 GB/s | 1.204 / 1.315 ms |
+| 64 random contiguous eight-record reads (14,155,776 B) | `F_NOCACHE` | 905,969,664 B | 1.670 GB/s | 8.504 / 8.817 ms |
+| 64 sequential 64-MiB reads | `F_NOCACHE` | 4 GiB | 1.643 GB/s | 39.584 / 49.041 ms |
+| Random one-expert trace, buffered pass 1 | buffered | 905,969,664 B | 1.433 GB/s | 1.250 / 1.374 ms |
+| Identical immediate warm repeat | buffered | 905,969,664 B | 4.018 GB/s | 0.428 / 0.565 ms |
+
+The contiguous eight-record result is an upper bound, not an assumption that a
+router's eight IDs are adjacent in the pack. The one-record random result is
+the conservative storage baseline for exact routed misses. Exact K=8 requests
+`40 * 8 * 1,769,472 = 566,231,040` expert bytes/token at a zero-percent hit
+rate. Therefore the measured storage-only zero-hit ceiling is about 2.56 tok/s
+before model compute, router synchronization, scheduling overhead, or thermal
+effects. This does not yet constitute an end-to-end throughput claim. It shows
+that the 2.0 tok/s provisional goal is physically plausible but requires cache
+reuse and/or useful I/O overlap; the synchronous runtime and oversubscription
+baselines still determine whether the target and required improvement threshold
+are finally frozen.
 
 Track physical/read-request bytes separately from logical expert bytes. A cache
 hit has zero expert-file I/O; a correct speculative prefetch that is later

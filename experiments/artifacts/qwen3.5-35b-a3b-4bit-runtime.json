@@ -1,0 +1,26 @@
+{
+  "artifact_format": "vference.runtime-model.v1",
+  "built_at_local_date": "2026-09-01",
+  "build_commit": "178e01f560c8e9885f2797d22e2af0013859e200",
+  "build_elapsed_seconds": 534.3500099589874,
+  "core_file_bytes": 1379054296,
+  "core_payload_bytes": 1378869376,
+  "expert_pack_bytes": 18119393280,
+  "expert_record_bytes": 1769472,
+  "expert_records": 10240,
+  "output_sha256": {
+    "core.safetensors": "13321337ce3fa681ee71c782f28bf14439bf8206faf6e5e77d496dce0cc5b832",
+    "experts.index.json": "8dfd56512622e19c11119e63a4d66a9c242e3c6f6c2c4d775f3a92eed9bb76ad",
+    "experts.pack": "9b26ebdf13a2863d607e1c3ea6e2528ff0267b7f472f8fd37fd20d3adb497e18"
+  },
+  "source": {
+    "repository": "mlx-community/Qwen3.5-35B-A3B-4bit",
+    "revision": "1e20fd8d42056f870933bf98ca6211024744f7ec"
+  },
+  "verification": {
+    "expert_records_checked": 10240,
+    "failures": [],
+    "source_tensors_checked": 1757,
+    "verified": true
+  }
+}

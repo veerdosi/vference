@@ -5,7 +5,8 @@ sparse Mixture-of-Experts models larger than unified memory on Apple Silicon.
 Qwen3.5-35B-A3B on an 8 GB M2 MacBook Air is the first architecture adapter and
 validation target, not the intended permanent scope.
 
-The project is currently in the architecture and feasibility phase. Start with
+The project has completed the lossless Stage 1 artifact build and internal-SSD
+storage baseline; correctness-first streamed execution is next. Start with
 [the technical reference](docs/technical-reference.md). It records the model
 facts, memory and I/O arithmetic, proposed runtime architecture, quality
 invariants, validation gates, risks, and staged implementation plan.
