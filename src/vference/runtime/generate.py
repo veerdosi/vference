@@ -43,6 +43,8 @@ def generate_greedy(
     cache_policy: str = "global",
     decode_cache_policy: str | None = None,
     clear_cache_between_prefill_chunks: bool = False,
+    needle: str | None = None,
+    needle_context_tokens: int | None = None,
 ) -> dict[str, object]:
     if max_tokens < 1:
         raise ValueError("max_tokens must be positive")
@@ -50,6 +52,12 @@ def generate_greedy(
         raise ValueError("prefill chunk size must be positive")
     if repeat_raw_prompt_to_tokens is not None and repeat_raw_prompt_to_tokens < 1:
         raise ValueError("repeated raw prompt token count must be positive")
+    if (needle is None) != (needle_context_tokens is None):
+        raise ValueError("needle and needle context token count must be set together")
+    if needle_context_tokens is not None and needle_context_tokens < 1:
+        raise ValueError("needle context token count must be positive")
+    if needle is not None and repeat_raw_prompt_to_tokens is not None:
+        raise ValueError("needle context and repeated-token stress mode are exclusive")
     process = psutil.Process()
     rss_before = process.memory_info().rss
     swap_before = psutil.swap_memory().used
@@ -65,7 +73,32 @@ def generate_greedy(
     load_seconds = time.perf_counter() - load_started
     try:
         prompt_mode = "chat" if chat_template else "raw"
-        if repeat_raw_prompt_to_tokens is not None:
+        if needle is not None and needle_context_tokens is not None:
+            filler_tokens = tokenizer.encode(prompt, add_special_tokens=False)
+            needle_tokens = tokenizer.encode(
+                f"\nIMPORTANT FACT: The verification code is {needle}.\n",
+                add_special_tokens=False,
+            )
+            query_tokens = tokenizer.encode(
+                "\nQuestion: What is the verification code? Respond with only the code.\nAnswer:",
+                add_special_tokens=False,
+            )
+            filler_count = needle_context_tokens - len(needle_tokens) - len(query_tokens)
+            if not filler_tokens or filler_count < 1:
+                raise ValueError("needle context target is too small for the prompt")
+            repeated = (
+                filler_tokens
+                * ((filler_count + len(filler_tokens) - 1) // len(filler_tokens))
+            )[:filler_count]
+            insertion = filler_count // 4
+            prompt_tokens = [
+                *repeated[:insertion],
+                *needle_tokens,
+                *repeated[insertion:],
+                *query_tokens,
+            ]
+            prompt_mode = "synthetic_needle_retrieval"
+        elif repeat_raw_prompt_to_tokens is not None:
             base_tokens = tokenizer.encode(prompt, add_special_tokens=False)
             if not base_tokens:
                 raise ValueError("prompt encoded to zero tokens")
@@ -130,6 +163,7 @@ def generate_greedy(
             "prompt": prompt,
             "chat_template": chat_template,
             "prompt_mode": prompt_mode,
+            "needle": needle,
             "enable_thinking": enable_thinking,
             "store_kind": store_kind,
             "cache_policy": cache_policy,
