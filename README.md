@@ -63,6 +63,7 @@ uv run vference stream-generate artifacts/qwen3.5-35b-a3b-4bit-runtime \
 This configuration averaged 2.278 decode tok/s across three identical
 8K-total-token runs without swap growth, and a separate 7,936-token needle
 retrieval returned the expected code. Unsafe contexts are rejected against a
-measured memory model before prefill. It is not yet a release claim; multi-turn
-handling, same-context baseline confidence, and the broader correctness corpus
-remain.
+measured memory model before prefill. Stable slots also match the Python
+exact-expert reference with zero logit error on the first split-state and
+five-domain deterministic corpus. It is not yet a release claim; same-context
+baseline confidence and broader correctness cases remain.

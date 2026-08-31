@@ -1,0 +1,59 @@
+{
+  "artifact_sha256": "9b26ebdf13a2863d607e1c3ea6e2528ff0267b7f472f8fd37fd20d3adb497e18",
+  "benchmark_commit": "4bd779b5b7da8e15d313e551dbfeeaa3d1cd2e2e",
+  "date_local": "2026-09-01",
+  "model": {
+    "repository": "mlx-community/Qwen3.5-35B-A3B-4bit",
+    "revision": "1e20fd8d42056f870933bf98ca6211024744f7ec"
+  },
+  "comparison": "stable native slots versus Python exact-expert store using the same quantized artifact and identical MLX model path",
+  "multi_turn": {
+    "continuation_tokens": 32,
+    "first_segment_tokens": 11,
+    "initial_argmax_equal": true,
+    "initial_logits_max_abs_error": 0.0,
+    "initial_logits_mean_abs_error": 0.0,
+    "reference_state_bytes": 69632000,
+    "second_segment_tokens": 15,
+    "stable_state_bytes": 69632000,
+    "tokens_exact": true
+  },
+  "corpus": {
+    "all_tokens_exact": true,
+    "case_count": 5,
+    "cases": [
+      {
+        "id": "plain_exact",
+        "initial_logits_max_abs_error": 0.0,
+        "output_text": "Runtime intact.<|im_end|>",
+        "tokens_exact": true
+      },
+      {
+        "id": "code",
+        "initial_logits_max_abs_error": 0.0,
+        "output_text": "```python\ndef square(n):\n    return n * n\n```<|im_end|>",
+        "tokens_exact": true
+      },
+      {
+        "id": "multilingual",
+        "initial_logits_max_abs_error": 0.0,
+        "tokens_exact": true
+      },
+      {
+        "id": "json",
+        "initial_logits_max_abs_error": 0.0,
+        "output_text": "{\"name\":\"vference\",\"active\":true}<|im_end|>",
+        "tokens_exact": true
+      },
+      {
+        "id": "reasoning",
+        "initial_logits_max_abs_error": 0.0,
+        "output_text": "640<|im_end|>",
+        "tokens_exact": true
+      }
+    ],
+    "format": "vference.runtime-corpus.v1",
+    "max_initial_logits_abs_error": 0.0,
+    "path": "experiments/corpus/runtime-v1.json"
+  }
+}

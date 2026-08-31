@@ -744,9 +744,20 @@ admitted; the previously swap-heavy 640-slot 8K configuration estimated 3.49
 GiB and was rejected before prefill. The estimator exactly matched measured
 state allocations at 1, 513, and 8,192 tokens.
 
-Full release qualification still requires same-context baseline confidence,
-multi-turn handling, and the wider deterministic regression corpus. See
+Full release qualification still requires same-context baseline confidence
+and the wider deterministic regression corpus. See
 `experiments/runtime/stage5-8k-feasibility-2026-09-01.json`.
+
+The first split-state and cross-domain runtime corpus now compare the stable
+native store directly with the Python exact-expert reference under identical
+MLX operations. A two-segment prefix followed by 32 greedy tokens had zero
+initial-logit error, identical 69,632,000-byte cache states, and identical
+continuations. Five chat cases—plain exact response, Python code, Japanese,
+compact JSON, and arithmetic—each had zero initial-logit error and exact output
+tokens. This confirms that storage/cache implementation does not worsen these
+outputs; it does not replace BF16-versus-quantized quality evaluation. The
+tracked corpus is `experiments/corpus/runtime-v1.json`, and results are in
+`experiments/runtime/runtime-correctness-v1-2026-09-01.json`.
 
 Only 3.13% of sorted within-layer selected-ID pairs were adjacent in the v1
 pack. Blindly reading the span between the minimum and maximum of eight routed
@@ -869,8 +880,10 @@ working-set splitting, phase-specific cache policies, and allocator cleanup are
 implemented. One synthetic 8K-total/256-output workload cleared the absolute
 throughput and no-swap gate in three repetitions, and a separate 7,936-token
 needle-retrieval case passed. Exact Qwen state accounting and measured-profile
-admission are implemented. Multi-turn handling, same-context baseline
-confidence, and the broader correctness corpus remain.
+admission are implemented. The first multi-turn split-state reference and a
+five-domain deterministic corpus pass exactly. Same-context baseline
+confidence and broader cases such as tool calls, schemas, adversarial churn,
+and stochastic sampling remain.
 
 ### Stage 6 — quantization experiments
 
