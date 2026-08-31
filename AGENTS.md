@@ -19,3 +19,10 @@ claim.
 Artifact acquisition is staged. Use the pinned MLX 4-bit Qwen artifact for
 runtime development. Do not download the official BF16 checkpoint until Stage
 6 quantization-quality evaluation.
+
+Keep the downloaded source checkpoint and inactive or alternate artifacts on
+`/Volumes/veer`. Prefer the Mac's internal SSD for the active repacked expert
+store and other inference-critical artifacts while preserving enough free space
+for macOS and swap. Do not benchmark the external path again unless internal
+capacity becomes insufficient or an explicit design change puts it back on the
+critical path.

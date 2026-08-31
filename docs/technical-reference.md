@@ -341,20 +341,30 @@ slot policy. Benchmark at least:
 - read-only mapping plus `MADV_RANDOM`/`WILLNEED`/`DONTNEED`.
 
 Apple recommends aligned buffers for uncached reads and documents mapped I/O
-for random access. The best I/O method and artifact placement must be measured
-on both the internal SSD and the attached external SSD, including cold cache,
-warm cache, expert-sized random reads, coalesced reads, sustained reads, and
-end-to-end expert stall time. Do not use advertised sequential bandwidth as the
-runtime model.
+for random access. Benchmark the internal SSD using the actual vference access
+pattern: cold and warm expert-sized reads, coalesced reads, sustained reads, and
+end-to-end exposed expert stall time. Do not use advertised sequential bandwidth
+as the runtime model.
 
-Storage placement is a policy decision, not a fixed architecture rule. The
-selected result may be external-only, internal-only, or hybrid: for example,
-the source/cold expert pack may remain external while a bounded hot or repacked
-artifact lives internally. Compare physical bytes, latency distributions,
-thermal stability, interface limits, filesystem cache behavior, and memory
-pressure before choosing. Internal free space is itself a budget; benchmarks
-may use a temporary representative shard, but must not copy the full model or
-retain redundant artifacts without a measured benefit.
+The storage policy for the current machine is:
+
+- `/Volumes/veer/vference/models/source/qwen3.5-35b-a3b-4bit` remains the
+  authoritative downloaded source checkpoint.
+- `VEER` holds inactive experiment output, alternate packs/layouts,
+  quantizations, and overflow that is not latency-critical.
+- The current repacked expert store and other inference-critical artifacts
+  preferentially live on the internal SSD.
+- Internal placement is admitted only while a configured reserve remains for
+  macOS, swap, normal applications, conversion temporaries, and safe runtime
+  operation. Move inactive artifacts back to `VEER` as needed.
+- The USB-connected external SSD is not a required performance dependency for
+  the main runtime. Do not benchmark it again unless internal capacity becomes
+  insufficient or another concrete design requires it on the inference-critical
+  path.
+
+The already-measured USB2 result remains in experiment history because failed
+or ruled-out approaches are evidence, not because it is the selected runtime
+path.
 
 Track physical/read-request bytes separately from logical expert bytes. A cache
 hit has zero expert-file I/O; a correct speculative prefetch that is later
@@ -633,7 +643,7 @@ functional if no ANE candidate wins.
 | ------------------------------------------------ | ----------------------------------------------------------------- | --------------------------------------------------------------------- |
 | Non-routed trunk/temporaries leave too few slots | Measure peak with core-only forward and reserved state            | Stronger trunk quantization, shorter context, or target is infeasible |
 | Routing has poor cacheability                    | Record diverse Qwen3.5 traces; replay capacities/policies         | Throughput becomes SSD-bound; prediction cannot manufacture locality  |
-| Storage path cannot sustain required small reads | Compare cold/warm expert, coalesced, sustained, and stall measurements on internal/external paths | Repack, choose internal/external/hybrid placement, or identify the interface/hardware ceiling |
+| Internal storage cannot sustain required small reads | Measure cold/warm expert-sized, coalesced, sustained, and end-to-end stall behavior | Repack/coalesce, revise cache policy, or identify the internal-storage hardware ceiling |
 | Router synchronization serializes pipeline       | Instruments per-layer eval/sync and native fused route submission | Integrate routing/demand notification deeper into native MLX seam     |
 | MLX allocator duplicates/retains slot data       | Compare slot bytes, active/peak memory, RSS over long decode      | Native stable buffers and strict cache-limit management required      |
 | Prefill touches most experts                     | Measure union by chunk/prompt and TTFT bytes                      | Dedicated expert-major prefill is mandatory                           |

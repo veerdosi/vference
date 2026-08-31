@@ -19,3 +19,7 @@ at an admitted 8K context, while also materially outperforming both OS swapping
 and naïve synchronous expert streaming on the same hardware and model artifact.
 Stage 0 must confirm or revise the absolute threshold from measured M2 storage
 limits before cache and prefetch tuning begins.
+
+The external `VEER` SSD holds the downloaded source checkpoint and inactive
+artifacts. Active repacked experts and other latency-critical runtime files
+preferentially live on the internal SSD, subject to a system free-space reserve.
