@@ -1,0 +1,89 @@
+{
+  "artifact_sha256": "9b26ebdf13a2863d607e1c3ea6e2528ff0267b7f472f8fd37fd20d3adb497e18",
+  "benchmark_commit": "3532df1f81157ad5157bd071b97183f7d8c54ee3",
+  "cache_state": "F_NOCACHE expert file; explicit expert cache starts empty",
+  "date_local": "2026-09-01",
+  "hardware": {
+    "chip": "Apple M2",
+    "internal_storage": "/dev/disk3s5 APFS over Apple Fabric",
+    "memory_bytes": 8589934592,
+    "model": "Mac14,2",
+    "thermal_status_after_runs": "No thermal or performance warning recorded by pmset"
+  },
+  "model": {
+    "repository": "mlx-community/Qwen3.5-35B-A3B-4bit",
+    "revision": "1e20fd8d42056f870933bf98ca6211024744f7ec"
+  },
+  "prompt": {
+    "chat_template": true,
+    "enable_thinking": false,
+    "text": "Write a detailed technical essay of at least 1500 words explaining sparse mixture-of-experts inference systems.",
+    "tokens": 35
+  },
+  "route_trace": {
+    "adjacent_id_pair_rate": 0.031280788177339904,
+    "expert_requests": 92800,
+    "sha256": "4d40197fb6dea1fa7b950d0132ba922a69be1776a986aedee25eff6467ffc816",
+    "unique_layer_expert_pairs": 6846
+  },
+  "runs": [
+    {
+      "cache_capacity_bytes": 566231040,
+      "cache_capacity_records": 320,
+      "decode_calls": 255,
+      "decode_latency_seconds": {
+        "max": 0.5734736250014976,
+        "mean": 0.4165936813795912,
+        "p50": 0.4102980410098098,
+        "p95": 0.5124032499734312
+      },
+      "decode_tokens_per_second": 2.40042046890486,
+      "expert_store": {
+        "bytes_read": 116701986816,
+        "execute_seconds": 116.826172889,
+        "hits": 26847,
+        "materialize_seconds": 9.297111546,
+        "misses": 65953,
+        "pread_seconds": 83.232924705,
+        "router_and_graph_wait_seconds": 23.08076142
+      },
+      "mlx_active_bytes": 2021466250,
+      "mlx_peak_bytes": 2023806400,
+      "output_tokens": 256,
+      "prefill_seconds": 14.512242374999914
+    },
+    {
+      "cache_capacity_bytes": 1811939328,
+      "cache_capacity_records": 1024,
+      "decode_calls": 255,
+      "decode_latency_seconds": {
+        "max": 0.7620654170168564,
+        "mean": 0.41251708512986535,
+        "p50": 0.40077654202468693,
+        "p95": 0.6078878749976866
+      },
+      "decode_tokens_per_second": 2.424142019924309,
+      "expert_store": {
+        "bytes_read": 66958589952,
+        "execute_seconds": 115.800528234,
+        "hits": 54959,
+        "materialize_seconds": 34.459726079,
+        "misses": 37841,
+        "pread_seconds": 54.779601775,
+        "router_and_graph_wait_seconds": 25.499382614
+      },
+      "mlx_active_bytes": 3267174538,
+      "mlx_peak_bytes": 3269514688,
+      "output_tokens": 256,
+      "prefill_seconds": 14.522147041017888
+    }
+  ],
+  "swap_observation": {
+    "after_runs_mib": 3015.44,
+    "attribution": "Not attributable because pre-run swap was not captured; future harness must record deltas."
+  },
+  "verification": {
+    "greedy_output_tokens_equal_across_capacities": true,
+    "route_records_equal_across_capacities": true
+  }
+}

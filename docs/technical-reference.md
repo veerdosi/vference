@@ -609,6 +609,40 @@ slices into a small resident stacked reference before calling `gather_qmm`.
 This failed attempt is retained in the correctness experiment record and is
 further evidence that ordinary full-layer faulting is not a viable runtime.
 
+#### Sustained synchronous baseline (local measurement, 2026-09-01 SGT)
+
+With a 35-token chat prompt, 256 generated tokens, `F_NOCACHE`, an initially
+empty 320-record explicit LRU, and no prefetch or asynchronous I/O, decode
+sustained 2.400 model calls/s. Median latency was 410 ms and p95 was 512 ms;
+peak MLX memory was 2.024 GB. The run made 92,800 exact expert requests, hit
+28.9%, and physically read 116.70 GB. Of 116.83 seconds inside expert
+execution, measured `pread` occupied 83.23 seconds (71.2%), router/previous
+graph waits 23.08 seconds (19.8%), and record-to-MLX materialization 9.30
+seconds (8.0%). Effective expert-read bandwidth was 1.402 GB/s, consistent with
+the standalone internal-SSD result. `pmset` reported no thermal or performance
+warning after the runs.
+
+This clears the provisional 2.0 tok/s number for sustained short-context decode,
+but not the complete acceptance gate: context was only 35 prompt tokens, no
+pre-run swap snapshot was captured, and one run does not establish confidence
+intervals or 8K context behavior.
+
+The identical route trace replayed at larger LRU capacities predicted 59.2%
+hits at 1,024 records instead of 28.9% at 320. End-to-end validation preserved
+all 256 greedy tokens and every route and reduced physical reads from 116.70 GB
+to 66.96 GB. Nevertheless throughput improved only from 2.400 to 2.424 tok/s,
+while peak MLX memory rose to 3.270 GB and p95 latency worsened to 608 ms.
+Materialization time increased from 9.30 to 34.46 seconds, offsetting the 28.45
+seconds saved in `pread`. Therefore a larger cache of independently allocated
+MLX expert arrays is rejected as the primary optimization. Stable preallocated
+slots/native execution are required before spending substantially more RAM on
+expert residency.
+
+Only 3.13% of sorted within-layer selected-ID pairs were adjacent in the v1
+pack. Blindly reading the span between the minimum and maximum of eight routed
+IDs would therefore amplify I/O; coalescing must operate on genuinely adjacent
+ranges or use a trace-qualified physical reordering.
+
 ### 8.3 Runtime release gates
 
 A storage/scheduler change is releasable only if:
