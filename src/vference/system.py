@@ -18,7 +18,19 @@ def _run(*args: str) -> str:
 def git_state(repo: Path) -> dict[str, Any]:
     try:
         commit = _run("git", "-C", str(repo), "rev-parse", "HEAD")
-        dirty = bool(_run("git", "-C", str(repo), "status", "--porcelain"))
+        dirty = bool(
+            _run(
+                "git",
+                "-C",
+                str(repo),
+                "status",
+                "--porcelain",
+                "--",
+                ".",
+                ":(exclude)experiments/results.jsonl",
+                ":(exclude)experiments/raw/**",
+            )
+        )
         return {"commit": commit, "dirty": dirty}
     except (subprocess.CalledProcessError, FileNotFoundError):
         return {"commit": None, "dirty": None}
