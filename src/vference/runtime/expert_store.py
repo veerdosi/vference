@@ -4,6 +4,7 @@ import json
 import os
 import fcntl
 import time
+import zlib
 from collections import OrderedDict
 from dataclasses import dataclass
 from pathlib import Path
@@ -81,6 +82,7 @@ class SynchronousExpertStore:
             )
             for item in index["components"]
         )
+        self.record_crc32 = self._record_checksums(index)
         self._validate_layout()
         self.capacity = capacity
         self._fd = os.open(self.artifact / "experts.pack", os.O_RDONLY)
@@ -126,6 +128,16 @@ class SynchronousExpertStore:
         if any(left[1] != right[0] for left, right in zip(spans, spans[1:])):
             raise ValueError("expert components overlap or leave gaps")
 
+    def _record_checksums(self, index: dict[str, object]) -> tuple[int, ...]:
+        values = index.get("record_crc32")
+        expected = self.layer_count * self.expert_count
+        if not isinstance(values, list) or len(values) != expected:
+            raise ValueError(
+                "expert index lacks complete record CRC32 checksums; run "
+                "`vference artifact-add-checksums ARTIFACT`"
+            )
+        return tuple(int(str(value), 16) for value in values)
+
     def close(self) -> None:
         if self._fd >= 0:
             os.close(self._fd)
@@ -167,6 +179,13 @@ class SynchronousExpertStore:
             raise OSError(
                 f"short expert read for ({layer_id}, {expert_id}): "
                 f"{len(record)} != {self.record_size}"
+            )
+        expected_crc32 = self.record_crc32[offset // self.record_size]
+        actual_crc32 = zlib.crc32(record)
+        if actual_crc32 != expected_crc32:
+            raise OSError(
+                f"expert CRC32 mismatch for ({layer_id}, {expert_id}): "
+                f"{actual_crc32:08x} != {expected_crc32:08x}"
             )
         materialize_started = time.perf_counter_ns()
         arrays = {
@@ -271,6 +290,7 @@ class SynchronousExpertStore:
         return {
             "capacity": self.capacity,
             "nocache": self.nocache,
+            "record_integrity": "crc32",
             "resident": len(self._cache),
             "hits": self.hits,
             "misses": self.misses,
@@ -337,6 +357,7 @@ class StableSlotExpertStore(SynchronousExpertStore):
             )
             for item in index["components"]
         )
+        self.record_crc32 = self._record_checksums(index)
         self._validate_layout()
         self.capacity = capacity
         self.nocache = nocache
@@ -475,12 +496,14 @@ class StableSlotExpertStore(SynchronousExpertStore):
     ) -> int:
         key = (layer_id, expert_id)
         slot = self._allocate_slot(key, protected)
+        file_offset = self._record_offset(layer_id, expert_id)
         started = time.perf_counter_ns()
         count = self._reader.read_into(
             self._ordered_pools,
             slot,
-            self._record_offset(layer_id, expert_id),
+            file_offset,
             self._segment_bytes,
+            self.record_crc32[file_offset // self.record_size],
         )
         read_ns = time.perf_counter_ns() - started
         if count != self.record_size:

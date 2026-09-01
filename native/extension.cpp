@@ -11,6 +11,7 @@
 #include <sys/uio.h>
 #include <unistd.h>
 #include <vector>
+#include <zlib.h>
 
 #include "mlx/mlx.h"
 
@@ -77,7 +78,8 @@ class PackReader {
       const std::vector<mx::array>& pools,
       int slot,
       long file_offset,
-      const std::vector<long>& segment_bytes) {
+      const std::vector<long>& segment_bytes,
+      long expected_crc32) {
     if (slot < 0) throw std::invalid_argument("slot must be non-negative");
     if (pools.size() != segment_bytes.size()) {
       throw std::invalid_argument("pool and segment counts differ");
@@ -110,6 +112,20 @@ class PackReader {
           "short preadv for " + path_ + ": expected " + std::to_string(expected) +
           ", got " + std::to_string(count));
     }
+    if (expected_crc32 >= 0) {
+      uLong checksum = ::crc32(0L, Z_NULL, 0);
+      for (const auto& vector : vectors) {
+        checksum = ::crc32(
+            checksum,
+            static_cast<const Bytef*>(vector.iov_base),
+            static_cast<uInt>(vector.iov_len));
+      }
+      if (checksum != static_cast<uLong>(expected_crc32)) {
+        throw std::runtime_error(
+            "expert CRC32 mismatch for " + path_ + " at offset " +
+            std::to_string(file_offset));
+      }
+    }
     return static_cast<long>(count);
   }
 
@@ -133,5 +149,6 @@ NB_MODULE(_vference_native, module) {
           "pools"_a,
           "slot"_a,
           "file_offset"_a,
-          "segment_bytes"_a);
+          "segment_bytes"_a,
+          "expected_crc32"_a = -1);
 }

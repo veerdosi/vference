@@ -5,7 +5,11 @@ import json
 from collections import Counter
 from pathlib import Path
 
-from .artifacts.builder import build_qwen35_artifact, verify_qwen35_artifact
+from .artifacts.builder import (
+    add_expert_record_checksums,
+    build_qwen35_artifact,
+    verify_qwen35_artifact,
+)
 from .artifacts.safetensors import classify_tensor, scan_model
 from .bench.storage import probe_storage
 from .bench.cache import replay_trace
@@ -98,6 +102,10 @@ def _artifact_verify(args: argparse.Namespace) -> None:
     print_json(result)
     if not result["verified"]:
         raise SystemExit(1)
+
+
+def _artifact_add_checksums(args: argparse.Namespace) -> None:
+    print_json(add_expert_record_checksums(args.artifact))
 
 
 def _expert_math_verify(args: argparse.Namespace) -> None:
@@ -194,6 +202,10 @@ def build_parser() -> argparse.ArgumentParser:
     verify_parser.add_argument("source", type=Path)
     verify_parser.add_argument("artifact", type=Path)
     verify_parser.set_defaults(func=_artifact_verify)
+
+    checksum_parser = commands.add_parser("artifact-add-checksums")
+    checksum_parser.add_argument("artifact", type=Path)
+    checksum_parser.set_defaults(func=_artifact_add_checksums)
 
     math_parser = commands.add_parser("expert-math-verify")
     math_parser.add_argument("source", type=Path)
