@@ -69,3 +69,11 @@ five-domain deterministic corpus. Against an exact forced-demand 8K baseline,
 it improves throughput 17.6% and reduces exposed expert time 15.7%. It is not
 yet a release claim; broader correctness, stochastic, and failure-injection
 cases remain.
+
+Stage 4 also includes an opt-in one-record adaptive cross-layer prefetcher. It
+stages bytes in CPU memory and publishes them only when the exact router later
+requests that expert; synchronous exact demand remains the fallback. Enable it
+with `--prefetch-policy adaptive_cross_1`. It improved a short code workload by
+3.8% and the 8K workload by 4.4% with exact outputs, but the measured 8K result
+was 1.944 tok/s and therefore remains below the 2 tok/s gate. Power source is
+recorded as metadata, not treated as a separate runtime qualification.

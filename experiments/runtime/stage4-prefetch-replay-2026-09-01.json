@@ -2,9 +2,11 @@
   "artifact_sha256": "9b26ebdf13a2863d607e1c3ea6e2528ff0267b7f472f8fd37fd20d3adb497e18",
   "date_local": "2026-09-01",
   "decision": {
-    "live_prefetch": "not admitted",
-    "reason": "The cross-layer predictor is promising after a long repetitive prefill but does not generalize to the short-prompt trace. Static popularity pollutes both evaluated caches.",
-    "runtime_default": "no prefetch"
+    "adaptive_online_policy": "cleared the six-trace offline gate and advanced to an opt-in live experiment",
+    "fixed_prefill_only_policy": "not admitted",
+    "reason": "The fixed table did not generalize. Online causal adaptation reduced exposed misses on all six traces with at most 3.33% read amplification at budget one.",
+    "runtime_default": "no prefetch",
+    "superseded_live_evidence": "experiments/runtime/stage4-live-prefetch-2026-09-01.json"
   },
   "method": {
     "cache_model": "per-layer LRU with exact demand insertion",

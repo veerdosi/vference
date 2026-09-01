@@ -1,0 +1,139 @@
+{
+  "artifact": {
+    "expert_pack_bytes": 18119393280,
+    "expert_pack_sha256": "9b26ebdf13a2863d607e1c3ea6e2528ff0267b7f472f8fd37fd20d3adb497e18",
+    "model_revision": "1e20fd8d42056f870933bf98ca6211024744f7ec",
+    "repository": "mlx-community/Qwen3.5-35B-A3B-4bit"
+  },
+  "benchmark_commit": "cd41731",
+  "benchmark_window_local": "2026-09-01T11:47:11+08:00/2026-09-01T12:04:37+08:00",
+  "cache_state": "Each process began with an empty stable expert cache; experts.pack used F_NOCACHE.",
+  "decision": {
+    "default_policy": "none",
+    "experimental_policy": "adaptive_cross_1 remains opt-in",
+    "promotion_gate": "Clear the sustained 8K 2 tok/s/no-swap gate in the Mac's current operating state, then repeat across live multi-domain cases.",
+    "reason": "The policy improved both contemporaneous A/Bs and preserved exact outputs, but its 8K result was 1.944 tok/s. Power source is metadata, not an explanation or separate qualification target."
+  },
+  "dependencies": {
+    "mlx": "0.32.2",
+    "mlx_lm": "0.31.3",
+    "nanobind": "2.15.0"
+  },
+  "hardware": {
+    "chip": "Apple M2",
+    "internal_free_bytes_approx": 55834574848,
+    "memory_bytes": 8589934592,
+    "model": "Mac14,2",
+    "power": "Battery power confirmed immediately after the A/B window; recorded as metadata only.",
+    "storage": "Internal APFS /dev/disk3s5 over Apple Fabric",
+    "thermal": "pmset reported no thermal, performance, or CPU power warning after the runs"
+  },
+  "live_correctness": {
+    "code_case_tokens_equal": true,
+    "five_domain_all_tokens_exact": true,
+    "five_domain_max_initial_logits_abs_error": 0.0,
+    "five_domain_reference": "Python exact-expert store under identical MLX model operations",
+    "long_8k_tokens_equal_to_accepted_baseline": true,
+    "prefetch_failures": 0
+  },
+  "long_8k_ab": {
+    "common": {
+      "cache_capacity_records": 320,
+      "decode_cache_policy": "layer",
+      "generated_tokens": 256,
+      "peak_mlx_bytes": 2903312538,
+      "prefill_cache_policy": "global",
+      "prefill_chunk_size": 512,
+      "prompt_tokens": 7936
+    },
+    "control": {
+      "decode_mean_seconds": 0.5369402545690308,
+      "decode_p50_seconds": 0.5327181250031572,
+      "decode_p95_seconds": 0.6203052919881884,
+      "decode_tokens_per_second": 1.8624045999356837,
+      "expert_execute_seconds": 324.737310243,
+      "expert_physical_bytes": 241067556864,
+      "expert_pread_seconds": 172.493525054,
+      "prefill_seconds": 200.11725599999772,
+      "swap_delta_bytes": 9175040
+    },
+    "prefetch": {
+      "decode_mean_seconds": 0.5143159289329596,
+      "decode_p50_seconds": 0.5026257079734933,
+      "decode_p95_seconds": 0.5997557079826947,
+      "decode_tokens_per_second": 1.9443302136775715,
+      "expert_demand_bytes": 233789718528,
+      "expert_execute_seconds": 322.041201431,
+      "expert_physical_bytes": 242210635776,
+      "expert_pread_seconds": 167.483237114,
+      "late_prefetches": 20,
+      "prefetch_bytes": 8420917248,
+      "prefetch_copy_seconds": 0.305824971,
+      "prefetch_wait_seconds": 0.000639083,
+      "prefill_seconds": 203.6938967499882,
+      "submitted_prefetches": 4759,
+      "swap_delta_bytes": -90046464,
+      "useful_prefetches": 4113,
+      "wrong_prefetches": 646
+    },
+    "relative_result": {
+      "mean_latency_reduction_percent": 4.213564813506176,
+      "p95_latency_reduction_percent": 3.3128177803591896,
+      "physical_read_amplification": 1.0047417368262659,
+      "prefill_overhead_percent": 1.787272532854689,
+      "throughput_improvement_percent": 4.398915989829333
+    }
+  },
+  "operating_system": {
+    "build": "25G83",
+    "version": "26.6.2"
+  },
+  "short_code_ab": {
+    "common": {
+      "cache_capacity_records": 320,
+      "generated_tokens": 128,
+      "peak_mlx_bytes": 2057193554,
+      "prompt_tokens": 38,
+      "swap_delta_bytes": 0
+    },
+    "control": {
+      "decode_mean_seconds": 0.42578425131349523,
+      "decode_p95_seconds": 0.566191166988574,
+      "decode_tokens_per_second": 2.3486072979804105,
+      "expert_physical_bytes": 48927670272,
+      "prefill_seconds": 5.436484250007197
+    },
+    "prefetch_repetitions": {
+      "decode_mean_seconds": [
+        0.41100625755786935,
+        0.40955372476481877
+      ],
+      "decode_p95_seconds": [
+        0.5326630829949863,
+        0.528301125013968
+      ],
+      "decode_tokens_per_second": [
+        2.433052980608698,
+        2.4416821030604416
+      ],
+      "expert_physical_bytes": 50180456448,
+      "late_prefetches": [
+        6,
+        9
+      ],
+      "prefill_seconds": [
+        5.506987166998442,
+        5.3125335829972755
+      ],
+      "useful_prefetches": 743,
+      "wrong_prefetches": 708
+    },
+    "relative_result": {
+      "mean_latency_reduction_percent": 3.6413418543129072,
+      "mean_prefetch_tokens_per_second": 2.4373675418345697,
+      "p95_latency_reduction_percent": 6.306891570566919,
+      "physical_read_amplification": 1.025604860583704,
+      "throughput_improvement_percent": 3.7792713975846493
+    }
+  }
+}

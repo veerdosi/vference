@@ -488,9 +488,31 @@ two-record budget avoided 10,022 misses with 0.9% read amplification. This did
 not generalize to a 35-token technical prompt with 16 slots per layer: the
 one-record policy added 40 exposed misses and 4.9% physical reads, while the
 two-record policy avoided only 201 misses at 10.0% amplification. Static
-popularity polluted both caches. Live prefetch is therefore not admitted yet;
-the no-prefetch path remains the default. See
-`experiments/runtime/stage4-prefetch-replay-2026-09-01.json`.
+popularity polluted both caches. That fixed table was rejected.
+
+A causal online-adaptive version then trained the same transition counts only
+after each exact target route became known. With a one-record budget it reduced
+exposed misses on all six tested traces: four 128-token code, Japanese, JSON,
+and reasoning cases plus the two earlier traces. Worst-case ideal-replay read
+amplification was 3.33%; useful-prefetch rate ranged from 51.2% to 86.4%. This
+cleared the offline gate for a bounded live experiment.
+
+The live implementation uses one worker and one 1,769,472-byte CPU staging
+record. Prediction never writes an MLX slot or evicts a resident expert. Only
+an exact later router request can publish staged bytes; wrong or failed reads
+are discarded and synchronous exact demand remains the fallback. Against a
+contemporaneous 128-token code control, two prefetch runs averaged 3.78% more
+throughput and 6.31% lower p95 latency with 2.56% more physical bytes. At 8K it
+improved throughput 4.40%, mean latency 4.21%, and p95 3.31%, with 0.47% read
+amplification, identical output tokens, and no swap growth. The 8K prefetch run
+measured 1.944 tok/s versus a 1.862 tok/s control; both are below the 2 tok/s
+absolute gate. The Mac was observed on battery after the runs, but power source
+is benchmark metadata rather than a separate qualification target or an
+assumed cause of the difference from historical measurements.
+`adaptive_cross_1` remains opt-in and the default remains no prefetch until it
+passes the sustained gate in the Mac's current operating state. See
+`experiments/runtime/stage4-prefetch-replay-2026-09-01.json` and
+`experiments/runtime/stage4-live-prefetch-2026-09-01.json`.
 
 ### 5.7 Prefill is a separate operating mode
 
@@ -915,11 +937,12 @@ Add bounded native I/O and evaluate policies offline before live integration.
 Prefetch must increase throughput or reduce p95 stalls without increasing
 memory above budget or changing outputs. Keep a no-prefetch baseline in CI.
 **In progress:** the offline evaluator now separates exposed demand misses,
-useful speculative reads, eviction pollution, and total physical reads. The
-first cross-layer policy passed on a repetitive long prefill but failed to
-generalize to a short prompt, so asynchronous live integration is deliberately
-deferred until a representative multi-domain trace corpus clears the replay
-gate.
+useful speculative reads, eviction pollution, and total physical reads. A
+fixed prefill-only table failed to generalize and was rejected. Its causal
+online-adaptive successor cleared a six-trace gate and now has a bounded,
+exact-demand-only live staging implementation. Live A/Bs improved short and 8K
+decode, but the 8K arm missed the absolute throughput gate; the policy remains
+opt-in pending further stall reduction and broader live cases.
 
 ### Stage 5 — bounded prefill and long contexts
 
