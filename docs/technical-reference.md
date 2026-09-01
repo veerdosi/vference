@@ -779,6 +779,21 @@ pack. Blindly reading the span between the minimum and maximum of eight routed
 IDs would therefore amplify I/O; coalescing must operate on genuinely adjacent
 ranges or use a trace-qualified physical reordering.
 
+An attempted per-record CRC32 integrity path was rejected from the default
+runtime. The implementation detected injected bit flips and preserved the
+accepted 8K workload's exact 256-token output, but its sustained 7,936-token
+prefill plus 256-token decode run achieved only 1.824 tok/s and grew swap by
+221,642,752 bytes. This fails both provisional gates. A contiguous-record CPU
+microbenchmark had predicted 33.68 GiB/s checksum throughput, but that result
+did not capture MLX/unified-memory pipeline effects or the host-state drift
+seen in contemporaneous A/B runs. The runtime therefore continues to rely on
+the complete pack SHA-256 checked while constructing/verifying the immutable
+active artifact; it does not checksum records in the token-critical path.
+Future integrity work must run asynchronously or otherwise demonstrate the
+full sustained gates before adoption. Measurements and the rejected variants
+are recorded in
+`experiments/runtime/rejected-crc-on-load-2026-09-01.json`.
+
 ### 8.3 Runtime release gates
 
 A storage/scheduler change is releasable only if:

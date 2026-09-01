@@ -11,7 +11,6 @@
 #include <sys/uio.h>
 #include <unistd.h>
 #include <vector>
-#include <zlib.h>
 
 #include "mlx/mlx.h"
 
@@ -78,8 +77,7 @@ class PackReader {
       const std::vector<mx::array>& pools,
       int slot,
       long file_offset,
-      const std::vector<long>& segment_bytes,
-      long expected_crc32) {
+      const std::vector<long>& segment_bytes) {
     if (slot < 0) throw std::invalid_argument("slot must be non-negative");
     if (pools.size() != segment_bytes.size()) {
       throw std::invalid_argument("pool and segment counts differ");
@@ -101,38 +99,16 @@ class PackReader {
       expected += bytes;
     }
     ssize_t count;
-    if (expected_crc32 >= 0) scratch_.resize(static_cast<size_t>(expected));
     do {
-      if (expected_crc32 >= 0) {
-        count = ::pread(fd_, scratch_.data(), static_cast<size_t>(expected), file_offset);
-      } else {
-        count = ::preadv(
-            fd_, vectors.data(), static_cast<int>(vectors.size()), file_offset);
-      }
+      count = ::preadv(fd_, vectors.data(), static_cast<int>(vectors.size()), file_offset);
     } while (count < 0 && errno == EINTR);
     if (count < 0) {
-      throw std::runtime_error("pread failed for " + path_ + ": " + std::strerror(errno));
+      throw std::runtime_error("preadv failed for " + path_ + ": " + std::strerror(errno));
     }
     if (count != expected) {
       throw std::runtime_error(
           "short preadv for " + path_ + ": expected " + std::to_string(expected) +
           ", got " + std::to_string(count));
-    }
-    if (expected_crc32 >= 0) {
-      const uLong checksum = ::crc32(
-          0L, static_cast<const Bytef*>(scratch_.data()),
-          static_cast<uInt>(scratch_.size()));
-      if (checksum != static_cast<uLong>(expected_crc32)) {
-        throw std::runtime_error(
-            "expert CRC32 mismatch for " + path_ + " at offset " +
-            std::to_string(file_offset));
-      }
-      size_t source_offset = 0;
-      for (const auto& vector : vectors) {
-        std::memcpy(
-            vector.iov_base, scratch_.data() + source_offset, vector.iov_len);
-        source_offset += vector.iov_len;
-      }
     }
     return static_cast<long>(count);
   }
@@ -140,7 +116,6 @@ class PackReader {
  private:
   std::string path_;
   int fd_ = -1;
-  std::vector<unsigned char> scratch_;
 };
 
 }  // namespace
@@ -158,6 +133,5 @@ NB_MODULE(_vference_native, module) {
           "pools"_a,
           "slot"_a,
           "file_offset"_a,
-          "segment_bytes"_a,
-          "expected_crc32"_a = -1);
+          "segment_bytes"_a);
 }

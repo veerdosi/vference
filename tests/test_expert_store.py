@@ -1,5 +1,4 @@
 import json
-import zlib
 from pathlib import Path
 
 import mlx.core as mx
@@ -15,18 +14,6 @@ def _bytes(array: mx.array) -> bytes:
     if array.dtype == mx.bfloat16:
         array = array.view(mx.uint16)
     return np.asarray(array).tobytes()
-
-
-def _write_test_pack(
-    path: Path,
-    index: dict[str, object],
-    experts: list[dict[str, mx.array]],
-    suffixes: tuple[str, ...],
-) -> None:
-    records = [b"".join(_bytes(expert[suffix]) for suffix in suffixes) for expert in experts]
-    index["record_crc32"] = [f"{zlib.crc32(record):08x}" for record in records]
-    (path / "experts.index.json").write_text(json.dumps(index))
-    (path / "experts.pack").write_bytes(b"".join(records))
 
 
 def test_streamed_experts_match_the_same_quantized_arrays(tmp_path: Path) -> None:
@@ -85,7 +72,11 @@ def test_streamed_experts_match_the_same_quantized_arrays(tmp_path: Path) -> Non
         "layer_ids": [0],
         "components": components,
     }
-    _write_test_pack(tmp_path, index, experts, suffixes)
+    (tmp_path / "experts.index.json").write_text(json.dumps(index))
+    with (tmp_path / "experts.pack").open("wb") as handle:
+        for expert in experts:
+            for suffix in suffixes:
+                handle.write(_bytes(expert[suffix]))
 
     x = mx.random.normal((1, 1, input_dims)).astype(mx.bfloat16)
     indices = mx.array([[[1, 0]]], dtype=mx.int32)
@@ -177,16 +168,23 @@ def test_stable_slots_match_math_and_keep_addresses(tmp_path: Path) -> None:
             }
         )
         offset += len(raw)
-    index = {
-        "format": "vference.expert-pack.v1",
-        "layer_count": 1,
-        "expert_count_per_layer": expert_count,
-        "record_size": offset,
-        "layer_stride": offset * expert_count,
-        "layer_ids": [0],
-        "components": components,
-    }
-    _write_test_pack(tmp_path, index, experts, suffixes)
+    (tmp_path / "experts.index.json").write_text(
+        json.dumps(
+            {
+                "format": "vference.expert-pack.v1",
+                "layer_count": 1,
+                "expert_count_per_layer": expert_count,
+                "record_size": offset,
+                "layer_stride": offset * expert_count,
+                "layer_ids": [0],
+                "components": components,
+            }
+        )
+    )
+    with (tmp_path / "experts.pack").open("wb") as handle:
+        for expert in experts:
+            for suffix in suffixes:
+                handle.write(_bytes(expert[suffix]))
 
     x = mx.random.normal((1, 1, dims)).astype(mx.bfloat16)
     with StableSlotExpertStore(tmp_path, capacity=2) as stable:
@@ -246,15 +244,7 @@ def test_stable_slots_match_math_and_keep_addresses(tmp_path: Path) -> None:
     )
 
     pack_path = tmp_path / "experts.pack"
-    original_pack = pack_path.read_bytes()
-    corrupted_pack = bytearray(original_pack)
-    corrupted_pack[-1] ^= 0x01
-    pack_path.write_bytes(corrupted_pack)
-    with StableSlotExpertStore(tmp_path, capacity=2) as corrupted:
-        with pytest.raises(RuntimeError, match="CRC32 mismatch"):
-            corrupted.execute(0, x, mx.array([[[2, 0]]], dtype=mx.int32))
-
-    pack_path.write_bytes(original_pack[:-1])
+    pack_path.write_bytes(pack_path.read_bytes()[:-1])
     with StableSlotExpertStore(tmp_path, capacity=2) as truncated:
         with pytest.raises(RuntimeError, match="short preadv"):
             truncated.execute(0, x, mx.array([[[2, 0]]], dtype=mx.int32))

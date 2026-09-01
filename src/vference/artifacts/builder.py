@@ -6,7 +6,6 @@ import os
 import shutil
 import struct
 import time
-import zlib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import BinaryIO, Iterable
@@ -37,20 +36,6 @@ def _sha256_file(path: Path) -> str:
         while chunk := handle.read(COPY_CHUNK):
             digest.update(chunk)
     return digest.hexdigest()
-
-
-def _expert_pack_integrity(path: Path, record_size: int) -> tuple[str, list[str]]:
-    digest = hashlib.sha256()
-    checksums: list[str] = []
-    with path.open("rb", buffering=0) as handle:
-        while data := handle.read(record_size):
-            if len(data) != record_size:
-                raise OSError(
-                    f"partial expert record in {path}: {len(data)} != {record_size}"
-                )
-            digest.update(data)
-            checksums.append(f"{zlib.crc32(data):08x}")
-    return digest.hexdigest(), checksums
 
 
 def _read_exact(handle: BinaryIO, size: int, *, path: Path) -> bytes:
@@ -130,11 +115,7 @@ def _pack_experts(layers: tuple[ExpertLayer, ...], output: Path) -> dict[str, st
     return digests
 
 
-def _index_document(
-    layers: tuple[ExpertLayer, ...],
-    digests: dict[str, str],
-    record_crc32: list[str],
-) -> dict:
+def _index_document(layers: tuple[ExpertLayer, ...], digests: dict[str, str]) -> dict:
     first = layers[0]
     return {
         "format": "vference.expert-pack.v1",
@@ -155,7 +136,6 @@ def _index_document(
             for component in first.components
         ],
         "source_tensor_sha256": digests,
-        "record_crc32": record_crc32,
     }
 
 
@@ -213,11 +193,8 @@ def build_qwen35_artifact(
         expert_path = partial / "experts.pack"
         core_path = partial / "core.safetensors"
         expert_digests = _pack_experts(layers, expert_path)
-        expert_pack_sha256, record_crc32 = _expert_pack_integrity(
-            expert_path, layers[0].record_size
-        )
         core_digests = _copy_core(core_entries, core_path)
-        index = _index_document(layers, expert_digests, record_crc32)
+        index = _index_document(layers, expert_digests)
         (partial / "experts.index.json").write_text(
             json.dumps(index, indent=2, sort_keys=True) + "\n"
         )
@@ -244,7 +221,7 @@ def build_qwen35_artifact(
             "support_file_sha256": support_hashes,
             "output_sha256": {
                 "core.safetensors": _sha256_file(core_path),
-                "experts.pack": expert_pack_sha256,
+                "experts.pack": _sha256_file(expert_path),
                 "experts.index.json": _sha256_file(partial / "experts.index.json"),
             },
         }
@@ -264,45 +241,6 @@ def build_qwen35_artifact(
         expert_records=len(layers) * layers[0].expert_count,
         elapsed_seconds=time.monotonic() - started,
     )
-
-
-def add_expert_record_checksums(artifact: Path) -> dict[str, object]:
-    """Add CRC32 record checksums to an already verified v1 runtime artifact."""
-    artifact = artifact.resolve()
-    index_path = artifact / "experts.index.json"
-    manifest_path = artifact / "manifest.json"
-    pack_path = artifact / "experts.pack"
-    index = json.loads(index_path.read_text())
-    manifest = json.loads(manifest_path.read_text())
-    expected_pack_sha = manifest["output_sha256"]["experts.pack"]
-    actual_pack_sha, checksums = _expert_pack_integrity(
-        pack_path, int(index["record_size"])
-    )
-    if actual_pack_sha != expected_pack_sha:
-        raise ValueError("expert pack SHA-256 changed; refusing to add checksums")
-    expected_records = int(index["layer_count"]) * int(
-        index["expert_count_per_layer"]
-    )
-    if len(checksums) != expected_records:
-        raise ValueError(
-            f"expert record count mismatch: {len(checksums)} != {expected_records}"
-        )
-    index["record_crc32"] = checksums
-    index_data = json.dumps(index, indent=2, sort_keys=True) + "\n"
-    index_temp = index_path.with_suffix(".json.checksum-partial")
-    index_temp.write_text(index_data)
-    manifest["output_sha256"]["experts.index.json"] = _sha256_file(index_temp)
-    manifest_data = json.dumps(manifest, indent=2, sort_keys=True) + "\n"
-    manifest_temp = manifest_path.with_suffix(".json.checksum-partial")
-    manifest_temp.write_text(manifest_data)
-    os.replace(index_temp, index_path)
-    os.replace(manifest_temp, manifest_path)
-    return {
-        "artifact": str(artifact),
-        "expert_pack_sha256": actual_pack_sha,
-        "record_count": len(checksums),
-        "algorithm": "crc32",
-    }
 
 
 def verify_qwen35_artifact(source: Path, artifact: Path) -> dict[str, object]:

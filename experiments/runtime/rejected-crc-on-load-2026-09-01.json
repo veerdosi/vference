@@ -1,0 +1,62 @@
+{
+  "artifact_sha256": "9b26ebdf13a2863d607e1c3ea6e2528ff0267b7f472f8fd37fd20d3adb497e18",
+  "date_local": "2026-09-01",
+  "decision": {
+    "default_runtime": "rejected",
+    "reason": "The sustained 8192-total-token run missed the 2 tok/s and no-swap gates. Per-record CRC remains a rejected experiment, not part of the runtime path.",
+    "retained_integrity_boundary": "Artifact construction/verification checks the complete experts.pack SHA-256 before the immutable active artifact is admitted."
+  },
+  "implementation_commits_reverted": [
+    "5f97fc8",
+    "33cf439",
+    "731a7d4"
+  ],
+  "long_context_run": {
+    "cache_capacity_records": 320,
+    "cache_policy": "global prefill, layer-partitioned decode",
+    "decode_latency_seconds": {
+      "mean": 0.5482285011366841,
+      "p50": 0.5426530830154661,
+      "p95": 0.632949708000524
+    },
+    "decode_tokens_per_second": 1.824056935979475,
+    "expert_bytes_read": 241067556864,
+    "expert_records_verified_once": 7009,
+    "generated_tokens": 256,
+    "mlx_peak_bytes": 2903312538,
+    "prefill_chunk_size": 512,
+    "prefill_seconds": 201.31606100001954,
+    "prompt_tokens": 7936,
+    "swap_delta_bytes": 221642752,
+    "tokens_equal_to_accepted_baseline": true
+  },
+  "microbenchmark": {
+    "crc32_gib_per_second": 33.68,
+    "crc32_microseconds_per_1769472_byte_record": 48.9,
+    "scope": "CPU checksum of a contiguous real-sized record; this did not predict unified-memory pipeline behavior."
+  },
+  "short_context_diagnostics": [
+    {
+      "decode_tokens_per_second": 2.646310245000919,
+      "mode": "CRC32 after every preadv into MLX slots",
+      "swap_delta_bytes": 271712256
+    },
+    {
+      "decode_tokens_per_second": 2.7276007396953412,
+      "mode": "CRC32 only on first record load into MLX slots",
+      "swap_delta_bytes": 0
+    },
+    {
+      "decode_tokens_per_second": 2.706312945071299,
+      "mode": "CRC32 in CPU staging buffer on first load, then memcpy to MLX slots",
+      "swap_delta_bytes": 0
+    },
+    {
+      "decode_tokens_per_second": 2.738400152794165,
+      "mode": "contemporaneous checksum-bypassed A/B",
+      "swap_delta_bytes": 0
+    }
+  ],
+  "qualification_note": "The contemporaneous bypass indicates checksum work explains only part of the difference from the historical 3.262 tok/s short run; host state or benchmark drift also contributed. The conservative release decision relies on the actual long-context gate failure, not a claim that CRC alone caused the entire regression.",
+  "workload_prompt": "Sparse mixture-of-experts inference on Apple Silicon. "
+}
