@@ -67,6 +67,7 @@ def generate_greedy(
     prefetch_policy: str = "none",
     prefetch_budget: int = 1,
 ) -> dict[str, object]:
+    request_started = time.perf_counter()
     if max_tokens < 1:
         raise ValueError("max_tokens must be positive")
     if prefill_chunk_size < 1:
@@ -98,6 +99,7 @@ def generate_greedy(
         prefetch_budget=prefetch_budget,
     )
     load_seconds = time.perf_counter() - load_started
+    model_ready_at = time.perf_counter()
     memory_after_load = _memory_snapshot()
     try:
         prompt_mode = "chat" if chat_template else "raw"
@@ -115,8 +117,7 @@ def generate_greedy(
             if not filler_tokens or filler_count < 1:
                 raise ValueError("needle context target is too small for the prompt")
             repeated = (
-                filler_tokens
-                * ((filler_count + len(filler_tokens) - 1) // len(filler_tokens))
+                filler_tokens * ((filler_count + len(filler_tokens) - 1) // len(filler_tokens))
             )[:filler_count]
             insertion = filler_count // 4
             prompt_tokens = [
@@ -130,9 +131,7 @@ def generate_greedy(
             base_tokens = tokenizer.encode(prompt, add_special_tokens=False)
             if not base_tokens:
                 raise ValueError("prompt encoded to zero tokens")
-            repetitions = (
-                repeat_raw_prompt_to_tokens + len(base_tokens) - 1
-            ) // len(base_tokens)
+            repetitions = (repeat_raw_prompt_to_tokens + len(base_tokens) - 1) // len(base_tokens)
             prompt_tokens = (base_tokens * repetitions)[:repeat_raw_prompt_to_tokens]
             prompt_mode = "synthetic_repeated_raw_tokens"
         elif chat_template:
@@ -157,9 +156,7 @@ def generate_greedy(
             prefill_chunk_size=prefill_chunk_size,
             budget_bytes=max_mlx_memory_bytes,
             runtime_reserve_bytes=(
-                (16 + 2 * max(0, prefetch_budget - 1)) * 1024**2
-                if prefetch_policy != "none"
-                else 0
+                (16 + 2 * max(0, prefetch_budget - 1)) * 1024**2 if prefetch_policy != "none" else 0
             ),
         )
         if not admission.admitted:
@@ -197,11 +194,14 @@ def generate_greedy(
 
         output_tokens: list[int] = []
         decode_latencies: list[float] = []
+        first_token_at: float | None = None
         eos_ids = set(tokenizer.eos_token_ids)
         for step in range(max_tokens):
             assert logits is not None
             token_id = int(mx.argmax(logits[0, -1]).item())
             output_tokens.append(token_id)
+            if first_token_at is None:
+                first_token_at = time.perf_counter()
             if token_id in eos_ids or step + 1 == max_tokens:
                 break
             started = time.perf_counter()
@@ -231,11 +231,11 @@ def generate_greedy(
             "output_text": tokenizer.decode(output_tokens),
             "load_seconds": load_seconds,
             "prefill_seconds": prefill_seconds,
+            "time_to_first_token_seconds": first_token_at - model_ready_at,
+            "cold_start_time_to_first_token_seconds": first_token_at - request_started,
             "decode_model_calls": len(decode_latencies),
             "decode_tokens_per_second": (
-                len(decode_latencies) / sum(decode_latencies)
-                if decode_latencies
-                else None
+                len(decode_latencies) / sum(decode_latencies) if decode_latencies else None
             ),
             "decode_latency_seconds": (
                 _latency_summary(decode_latencies) if decode_latencies else None
