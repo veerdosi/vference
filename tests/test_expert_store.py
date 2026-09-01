@@ -248,3 +248,71 @@ def test_stable_slots_match_math_and_keep_addresses(tmp_path: Path) -> None:
     with StableSlotExpertStore(tmp_path, capacity=2) as truncated:
         with pytest.raises(RuntimeError, match="short preadv"):
             truncated.execute(0, x, mx.array([[[2, 0]]], dtype=mx.int32))
+
+
+def test_adaptive_prefetch_stages_only_then_publishes_exact_demand(
+    tmp_path: Path,
+) -> None:
+    suffixes = (
+        "gate_proj.weight",
+        "gate_proj.scales",
+        "gate_proj.biases",
+        "up_proj.weight",
+        "up_proj.scales",
+        "up_proj.biases",
+        "down_proj.weight",
+        "down_proj.scales",
+        "down_proj.biases",
+    )
+    expert_count = 3
+    components = [
+        {
+            "suffix": suffix,
+            "dtype": "U32",
+            "source_shape": [expert_count, 1],
+            "bytes_per_expert": 4,
+            "record_offset": ordinal * 4,
+        }
+        for ordinal, suffix in enumerate(suffixes)
+    ]
+    index = {
+        "format": "vference.expert-pack.v1",
+        "layer_count": 2,
+        "expert_count_per_layer": expert_count,
+        "record_size": 36,
+        "layer_stride": 36 * expert_count,
+        "layer_ids": [0, 1],
+        "components": components,
+    }
+    (tmp_path / "experts.index.json").write_text(json.dumps(index))
+    records = []
+    for record_id in range(2 * expert_count):
+        records.append(
+            b"".join(
+                np.asarray([record_id * 10 + ordinal], dtype="<u4").tobytes()
+                for ordinal in range(len(suffixes))
+            )
+        )
+    (tmp_path / "experts.pack").write_bytes(b"".join(records))
+
+    with StableSlotExpertStore(
+        tmp_path,
+        capacity=4,
+        cache_policy="layer",
+        prefetch_policy="adaptive_cross_1",
+    ) as store:
+        first = np.asarray([[[0, 1]]], dtype=np.int64)
+        second = np.asarray([[[1, 2]]], dtype=np.int64)
+        store._observe_transition(0, first)
+        store._observe_transition(1, second)
+        store._observe_transition(0, first)
+        store._predict_next(0, first)
+        assert not store._cache
+        slots = store._resolve_slots(1, np.asarray([[[1, 0]]], dtype=np.int64))
+        stats = store.stats()["prefetch"]
+        assert stats["submitted"] == 1
+        assert stats["useful"] == 1
+        assert stats["failed"] == 0
+        predicted_slot = int(slots[0, 0, 0])
+        copied = int(np.asarray(store._pools[suffixes[0]])[predicted_slot, 0])
+        assert copied == 40

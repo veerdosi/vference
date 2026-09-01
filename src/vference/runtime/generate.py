@@ -51,6 +51,7 @@ def generate_greedy(
     needle: str | None = None,
     needle_context_tokens: int | None = None,
     max_mlx_memory_bytes: int | None = None,
+    prefetch_policy: str = "none",
 ) -> dict[str, object]:
     if max_tokens < 1:
         raise ValueError("max_tokens must be positive")
@@ -78,6 +79,7 @@ def generate_greedy(
         trace_routes=trace_output is not None,
         store_kind=store_kind,
         cache_policy=cache_policy,
+        prefetch_policy=prefetch_policy,
     )
     load_seconds = time.perf_counter() - load_started
     try:
@@ -137,6 +139,7 @@ def generate_greedy(
             total_tokens=len(prompt_tokens) + max_tokens,
             prefill_chunk_size=prefill_chunk_size,
             budget_bytes=max_mlx_memory_bytes,
+            runtime_reserve_bytes=(16 * 1024**2 if prefetch_policy != "none" else 0),
         )
         if not admission.admitted:
             raise MemoryError(
@@ -195,6 +198,7 @@ def generate_greedy(
             "store_kind": store_kind,
             "cache_policy": cache_policy,
             "decode_cache_policy": effective_decode_cache_policy,
+            "prefetch_policy": prefetch_policy,
             "prompt_tokens": len(prompt_tokens),
             "prefill_chunk_size": prefill_chunk_size,
             "clear_cache_between_prefill_chunks": clear_cache_between_prefill_chunks,

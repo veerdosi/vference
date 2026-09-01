@@ -53,6 +53,42 @@ uintptr_t data_pointer(const mx::array& input) {
   return reinterpret_cast<uintptr_t>(array.data<uint8_t>());
 }
 
+long copy_record_into(
+    const std::vector<mx::array>& pools,
+    int slot,
+    const std::vector<long>& segment_bytes,
+    const nb::bytes& record) {
+  if (slot < 0) throw std::invalid_argument("slot must be non-negative");
+  if (pools.size() != segment_bytes.size()) {
+    throw std::invalid_argument("pool and segment counts differ");
+  }
+  size_t expected = 0;
+  for (long bytes : segment_bytes) {
+    if (bytes <= 0) throw std::invalid_argument("segment bytes must be positive");
+    expected += static_cast<size_t>(bytes);
+  }
+  if (record.size() != expected) {
+    throw std::invalid_argument(
+        "staged expert size differs from packed record size");
+  }
+  const auto* source = static_cast<const uint8_t*>(record.data());
+  size_t source_offset = 0;
+  for (size_t index = 0; index < pools.size(); ++index) {
+    mx::array pool = pools[index];
+    pool.eval();
+    const size_t bytes = static_cast<size_t>(segment_bytes[index]);
+    if (bytes * static_cast<size_t>(slot + 1) > pool.nbytes()) {
+      throw std::invalid_argument("slot exceeds owned pool bounds");
+    }
+    std::memcpy(
+        pool.data<uint8_t>() + static_cast<size_t>(slot) * bytes,
+        source + source_offset,
+        bytes);
+    source_offset += bytes;
+  }
+  return static_cast<long>(expected);
+}
+
 class PackReader {
  public:
   PackReader(const std::string& path, bool nocache) : path_(path) {
@@ -125,6 +161,13 @@ NB_MODULE(_vference_native, module) {
   module.doc() = "Native stable-slot storage primitives for vference.";
   module.def("owned_zeros", &owned_zeros, "shape"_a, "dtype"_a);
   module.def("data_pointer", &data_pointer, "array"_a);
+  module.def(
+      "copy_record_into",
+      &copy_record_into,
+      "pools"_a,
+      "slot"_a,
+      "segment_bytes"_a,
+      "record"_a);
   nb::class_<PackReader>(module, "PackReader")
       .def(nb::init<const std::string&, bool>(), "path"_a, "nocache"_a = false)
       .def(

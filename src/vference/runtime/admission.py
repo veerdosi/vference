@@ -14,6 +14,7 @@ class AdmissionEstimate:
     estimated_peak_bytes: int
     resident_bytes: int
     model_state_bytes: int
+    runtime_reserve_bytes: int
     prefill_transient_reserve_bytes: int
     total_tokens: int
     prefill_chunk_size: int
@@ -55,6 +56,7 @@ def estimate_qwen35_admission(
     total_tokens: int,
     prefill_chunk_size: int,
     budget_bytes: int,
+    runtime_reserve_bytes: int = 0,
 ) -> AdmissionEstimate:
     """Conservative measured-profile admission estimate for the first adapter.
 
@@ -64,13 +66,14 @@ def estimate_qwen35_admission(
     """
     state_bytes = qwen35_state_bytes(config, total_tokens)
     transient_bytes = 576 * MIB + math.ceil(prefill_chunk_size * 384 * MIB / 512)
-    peak_bytes = resident_bytes + state_bytes + transient_bytes
+    peak_bytes = resident_bytes + state_bytes + transient_bytes + runtime_reserve_bytes
     return AdmissionEstimate(
         admitted=peak_bytes <= budget_bytes,
         budget_bytes=budget_bytes,
         estimated_peak_bytes=peak_bytes,
         resident_bytes=resident_bytes,
         model_state_bytes=state_bytes,
+        runtime_reserve_bytes=runtime_reserve_bytes,
         prefill_transient_reserve_bytes=transient_bytes,
         total_tokens=total_tokens,
         prefill_chunk_size=prefill_chunk_size,

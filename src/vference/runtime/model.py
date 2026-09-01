@@ -24,6 +24,7 @@ def load_streaming_qwen(
     trace_routes: bool = False,
     store_kind: str = "python",
     cache_policy: str = "global",
+    prefetch_policy: str = "none",
 ) -> tuple[Model, object, SynchronousExpertStore]:
     """Load the resident text core and attach exact synchronous expert streaming."""
     artifact = artifact.resolve()
@@ -44,8 +45,11 @@ def load_streaming_qwen(
     }
     if store_kind == "stable":
         store_kwargs["cache_policy"] = cache_policy
+        store_kwargs["prefetch_policy"] = prefetch_policy
     elif cache_policy != "global":
         raise ValueError("the Python reference store only supports global LRU")
+    elif prefetch_policy != "none":
+        raise ValueError("the Python reference store does not support prefetch")
     store = store_type(artifact, **store_kwargs)
     for layer_id, layer in enumerate(model.language_model.layers):
         layer.mlp.switch_mlp = StreamingSwitchGLU(layer_id, store)

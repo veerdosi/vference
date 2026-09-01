@@ -138,6 +138,7 @@ def _stream_generate(args: argparse.Namespace) -> None:
                 if args.max_mlx_memory_gib is not None
                 else None
             ),
+            prefetch_policy=args.prefetch_policy,
         )
     )
 
@@ -160,6 +161,7 @@ def _corpus_verify(args: argparse.Namespace) -> None:
         args.artifact,
         args.corpus,
         cache_capacity=args.cache_capacity,
+        prefetch_policy=args.prefetch_policy,
     )
     print_json(result)
     if not result["all_tokens_exact"]:
@@ -241,6 +243,11 @@ def build_parser() -> argparse.ArgumentParser:
     generate_parser.add_argument("--needle")
     generate_parser.add_argument("--needle-context-tokens", type=int)
     generate_parser.add_argument("--max-mlx-memory-gib", type=float)
+    generate_parser.add_argument(
+        "--prefetch-policy",
+        choices=("none", "adaptive_cross_1"),
+        default="none",
+    )
     generate_parser.set_defaults(func=_stream_generate)
 
     multi_turn_parser = commands.add_parser("multi-turn-verify")
@@ -255,6 +262,11 @@ def build_parser() -> argparse.ArgumentParser:
     corpus_parser.add_argument("artifact", type=Path)
     corpus_parser.add_argument("corpus", type=Path)
     corpus_parser.add_argument("--cache-capacity", type=int, default=320)
+    corpus_parser.add_argument(
+        "--prefetch-policy",
+        choices=("none", "adaptive_cross_1"),
+        default="none",
+    )
     corpus_parser.set_defaults(func=_corpus_verify)
 
     replay_parser = commands.add_parser("route-replay")
