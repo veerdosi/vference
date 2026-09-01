@@ -1,0 +1,189 @@
+{
+  "artifact": {
+    "expert_pack_bytes": 18119393280,
+    "expert_pack_sha256": "9b26ebdf13a2863d607e1c3ea6e2528ff0267b7f472f8fd37fd20d3adb497e18",
+    "model_revision": "1e20fd8d42056f870933bf98ca6211024744f7ec",
+    "repository": "mlx-community/Qwen3.5-35B-A3B-4bit"
+  },
+  "benchmark_commit": "fd5e8c65f809795fa1f78ce8d6f0271a0993b3b5",
+  "cache_state": "Each process began with an empty 320-record stable cache and used F_NOCACHE for experts.pack. The pool was replaced after prefill and before decode.",
+  "clean_run_protocol": "The user closed Safari, VS Code, and other optional applications. Codex/ChatGPT remained open. macOS Control Center was left untouched.",
+  "dependencies": {
+    "mlx": "0.32.2",
+    "mlx_lm": "0.31.3",
+    "nanobind": "2.15.0"
+  },
+  "hardware": {
+    "chip": "Apple M2",
+    "internal_free_bytes_after": 54391894016,
+    "memory_bytes": 8589934592,
+    "model": "Mac14,2",
+    "power": "Power source varied naturally during the window and is metadata only; no AC/battery A/B qualification was performed.",
+    "storage": "Internal APFS /dev/disk3s1s1 container over Apple Fabric",
+    "thermal": "pmset reported no thermal, performance, or CPU power warning after each sustained run"
+  },
+  "operating_system": {
+    "build": "25G83",
+    "version": "macOS 26.6.2"
+  },
+  "recorded_at_local": "2026-09-01T23:52:17+08:00",
+  "workload": {
+    "generated_tokens": 256,
+    "greedy": true,
+    "prompt": "Sparse mixture-of-experts inference on Apple Silicon. ",
+    "prompt_mode": "synthetic_repeated_raw_tokens",
+    "prompt_tokens": 7936,
+    "total_tokens_after_generation": 8192
+  },
+  "configuration": {
+    "decode_cache_policy": "layer",
+    "decode_transient_reserve_bytes": 469762048,
+    "max_mlx_memory_bytes": 3221225472,
+    "prefetch_budget": 2,
+    "prefetch_min_observations": 8,
+    "prefetch_policy": "adaptive_cross",
+    "prefill_cache_capacity": 320,
+    "prefill_cache_policy": "global",
+    "prefill_chunk_size": 512,
+    "clear_cache_between_prefill_chunks": true
+  },
+  "rejected_leaking_implementation": {
+    "base_commit_with_uncommitted_resize_patch": "e51467f",
+    "cause": "native owned_zeros retained every allocator buffer in a process-global vector and installed a no-op MLX deleter",
+    "expected_320_to_400_extra_pool_bytes": 141557760,
+    "isolated_allocator_active_bytes": {
+      "before": 0,
+      "capacity_320": 566231040,
+      "after_resize_to_400": 1274019840,
+      "after_close_collect_and_clear": 1274019840
+    },
+    "real_model_phase_transition_active_bytes": 2731876490,
+    "result": "Rejected before 8K because the old 566231040-byte pool remained live"
+  },
+  "allocator_lifetime_fix": {
+    "change": "Return the allocated MLX buffer with allocator::free as its array deleter; remove the process-global buffer owner; synchronously release pools on resize and close.",
+    "isolated_allocator_active_bytes": {
+      "before": 0,
+      "capacity_320": 566231040,
+      "after_resize_to_400": 707788800,
+      "after_close_collect_and_clear": 0
+    },
+    "tests": "22 pytest tests and ruff passed; a new native allocator regression asserts release to the starting MLX active-byte count",
+    "short_real_model_checks": {
+      "all_outputs_exact": true,
+      "capacity_400_phase_transition_active_bytes": 2165645450,
+      "capacity_400_peak_mlx_bytes": 2167938074,
+      "capacity_560_phase_transition_active_bytes": 2448760970,
+      "capacity_560_peak_mlx_bytes": 2451053594,
+      "output_tokens": [15771, 49942, 13, 5044, 3300, 279, 2099, 11]
+    }
+  },
+  "phase_profiled_320_reference": {
+    "benchmark_commit": "e51467f",
+    "decode_demand_bytes": 99315154944,
+    "decode_expert_execute_seconds": 111.47539974000003,
+    "decode_hits": 16731,
+    "decode_misses": 64869,
+    "decode_physical_bytes": 118027321344,
+    "decode_pread_seconds": 69.433952328,
+    "decode_router_and_graph_wait_seconds": 40.137825843,
+    "decode_tokens_per_second": 2.183742670408125,
+    "mlx_peak_bytes": 2903312538,
+    "output_token_sha256": "f4b04a69f0bb425f65d7103580aedf78b786bc324b6c2100083314a9a76b88bd",
+    "prefill_seconds": 203.80663949999143
+  },
+  "capacity_560_run": {
+    "decode_demand_bytes": 92952133632,
+    "decode_expert_execute_seconds": 107.76663312299996,
+    "decode_hits": 22303,
+    "decode_latency_seconds": {
+      "mean": 0.44281521568704835,
+      "p50": 0.43461504200240597,
+      "p95": 0.5066106670128647
+    },
+    "decode_misses": 59297,
+    "decode_mlx_peak_bytes": 2728457900,
+    "decode_physical_bytes": 106897342464,
+    "decode_pread_seconds": 66.403993606,
+    "decode_router_and_graph_wait_seconds": 39.38595563300001,
+    "decode_tokens_per_second": 2.2582783169463894,
+    "estimated_decode_peak_bytes": 3090571400,
+    "mlx_peak_bytes": 2903312538,
+    "output_token_sha256": "f4b04a69f0bb425f65d7103580aedf78b786bc324b6c2100083314a9a76b88bd",
+    "phase_transition_active_bytes": 2723029130,
+    "prefill_seconds": 202.78251241598628,
+    "swap_delta_bytes": 482541568,
+    "swap_in_delta_bytes": 2498871296,
+    "swap_out_delta_bytes": 19496960,
+    "time_to_first_token_seconds": 202.90368879199377
+  },
+  "capacity_480_runs": [
+    {
+      "decode_demand_bytes": 95185207296,
+      "decode_expert_execute_seconds": 109.47317509200002,
+      "decode_hits": 20567,
+      "decode_latency_seconds": {
+        "mean": 0.449706222722421,
+        "p50": 0.4414404160052072,
+        "p95": 0.5294820839772001
+      },
+      "decode_misses": 61033,
+      "decode_mlx_peak_bytes": 2586900140,
+      "decode_physical_bytes": 110174404608,
+      "decode_pread_seconds": 67.81104356100002,
+      "decode_router_and_graph_wait_seconds": 39.63169489799999,
+      "decode_tokens_per_second": 2.223673921935577,
+      "estimated_decode_peak_bytes": 2949013640,
+      "mlx_peak_bytes": 2903312538,
+      "output_token_sha256": "f4b04a69f0bb425f65d7103580aedf78b786bc324b6c2100083314a9a76b88bd",
+      "phase_transition_active_bytes": 2581471370,
+      "prefill_seconds": 203.36575837500277,
+      "swap_delta_bytes": -41943040,
+      "swap_in_delta_bytes": 1975500800,
+      "swap_out_delta_bytes": 17645568,
+      "time_to_first_token_seconds": 203.45156541699544
+    },
+    {
+      "decode_demand_bytes": 95185207296,
+      "decode_expert_execute_seconds": 110.87540334599998,
+      "decode_hits": 20567,
+      "decode_latency_seconds": {
+        "mean": 0.4547352225331398,
+        "p50": 0.44860983299440704,
+        "p95": 0.5307160000083968
+      },
+      "decode_misses": 61033,
+      "decode_mlx_peak_bytes": 2586900140,
+      "decode_physical_bytes": 110162018304,
+      "decode_pread_seconds": 67.787492967,
+      "decode_router_and_graph_wait_seconds": 40.973457159000006,
+      "decode_tokens_per_second": 2.1990819062341775,
+      "estimated_decode_peak_bytes": 2949013640,
+      "mlx_peak_bytes": 2903312538,
+      "output_token_sha256": "f4b04a69f0bb425f65d7103580aedf78b786bc324b6c2100083314a9a76b88bd",
+      "phase_transition_active_bytes": 2581471370,
+      "prefill_seconds": 200.1829134580039,
+      "swap_delta_bytes": 8323072,
+      "swap_in_delta_bytes": 2318352384,
+      "swap_out_delta_bytes": 22167552,
+      "time_to_first_token_seconds": 200.31802658300148
+    }
+  ],
+  "capacity_480_summary_vs_phase_profiled_320": {
+    "decode_expert_execute_change_percent": -1.1671727789581143,
+    "decode_miss_change_percent": -5.9134563504909865,
+    "decode_physical_byte_change_percent": -6.658720877934698,
+    "decode_pread_change_percent": -2.3543007551664275,
+    "decode_tokens_per_second_mean": 2.2113779140848773,
+    "decode_tokens_per_second_sample_standard_deviation": 0.01738918106550561,
+    "decode_throughput_change_percent": 1.265499092509259,
+    "swap_delta_bytes": [-41943040, 8323072]
+  },
+  "decision": {
+    "default_8gb_decode_capacity": 320,
+    "phase_resize_capability": "Retained as an explicit, admission-gated runtime mechanism for other memory budgets and future policies",
+    "status": "480 and 560 rejected as automatic/default 8 GB policies",
+    "reason": "Both capacities preserve exact output and reduce expert traffic, but 560 grew swap by 482.5 MB. Capacity 480 produced only a 1.27% mean throughput improvement, reduced measured expert execution by 1.17%, and one of two repetitions grew swap by 8.3 MB. This does not justify extra memory or clear the frozen no-swap/default-policy burden.",
+    "bottleneck_conclusion": "At 320 slots the decode path is primarily storage-bound, but simply spending more RAM on exact expert residency yields diminishing end-to-end returns because saved bytes only partly reduce demand pread time while the approximately 40-second router/graph synchronization component remains. A larger 8 GB pool is not the next default optimization."
+  }
+}

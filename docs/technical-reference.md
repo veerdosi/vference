@@ -1026,6 +1026,41 @@ The generation entry point now rejects a non-512 multi-chunk Qwen prefill by
 default. `--allow-unqualified-prefill-chunk-size` exists only for explicit
 correctness experiments such as the verifier; it is not a performance mode.
 
+A phase-separated profile of the selected 320-slot, confidence-gated
+two-record prefetch policy then attributed the 8K decode ceiling. Over 255
+decode calls it read 99,315,154,944 demand bytes plus 18,712,166,400 prefetch
+bytes. Demand `preadv` occupied 69.434 seconds (272.3 ms/call), equivalent to
+1.430 GB/s and therefore consistent with the independently measured 1.451 GB/s
+internal-SSD random-record result. The router/previous-graph synchronization
+path occupied another 40.138 seconds (157.4 ms/call). Expert execution totaled
+111.475 seconds inside 116.772 seconds of decode wall time; the run sustained
+2.184 tok/s and preserved the canonical token hash. Storage is the largest
+exposed decode cost, with serialized router/graph synchronization second.
+
+Phase-specific pool replacement was implemented to test whether decode could
+spend memory released after bounded prefill. The first implementation was
+rejected before an 8K run: `owned_zeros` intentionally retained every native
+allocator buffer for process lifetime, so resizing 320 to 400 slots accumulated
+1,274,019,840 active bytes instead of replacing the 566,231,040-byte pool. The
+native arrays now own their buffers through MLX's allocator deleter; the same
+isolation leaves exactly the 707,788,800-byte 400-slot replacement and returns
+to zero after close. Tests cover allocator release and bit-exact expert output
+across resize.
+
+The repaired mechanism preserved the accepted 256-token hash at 480 and 560
+decode slots, but neither capacity is selected as the 8 GB default. One
+560-slot run reduced decode physical bytes 9.43% and sustained 2.258 tok/s, but
+grew system-wide swap occupancy by 482,541,568 bytes. Two 480-slot runs reduced
+physical bytes by 6.66% and misses by 5.91%; they sustained 2.224 and 2.199
+tok/s (mean 2.211), only 1.27% above the phase-profiled 320-slot run. Their swap
+deltas were -41,943,040 and +8,323,072 bytes. The extra 283 MB therefore saved
+only 2.35% of demand-read time and 1.17% of expert execution time on average;
+it does not justify extra pressure or pass the frozen no-swap burden. The
+admission-gated resize remains available for machines with more headroom and
+future policies, while this 8 GB configuration continues to use 320 slots in
+both phases. Full evidence, including the rejected native lifetime design, is
+in `experiments/runtime/stage5-phase-cache-resize-2026-09-01.json`.
+
 ### Stage 6 — quantization experiments
 
 Only now notify the user that the official BF16 checkpoint is required and ask

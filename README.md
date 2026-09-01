@@ -70,6 +70,14 @@ it improves throughput 17.6% and reduces exposed expert time 15.7%. It is not
 yet a release claim; broader correctness, stochastic, and failure-injection
 cases remain.
 
+`--decode-cache-capacity` can replace the stable expert pool at the synchronized
+prefill/decode boundary when a different phase budget is explicitly desired.
+It is not enabled automatically on the 8 GB target. Exact 480- and 560-slot 8K
+experiments reduced expert traffic, but 560 caused 482.5 MB of swap growth and
+480 improved mean throughput only 1.3% while one repetition had positive swap
+growth. Keep the 8 GB long-context default at 320 slots; the resize mechanism
+is retained for larger-memory machines and future pressure-aware policies.
+
 Stage 4 also includes an opt-in one-record adaptive cross-layer prefetcher. It
 stages bytes in CPU memory and publishes them only when the exact router later
 requests that expert; synchronous exact demand remains the fallback. Enable it
