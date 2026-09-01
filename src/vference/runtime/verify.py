@@ -3,12 +3,14 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import resource
 import time
 from pathlib import Path
 
 import mlx.core as mx
 import mlx.nn as nn
 import numpy as np
+import psutil
 
 from vference.artifacts.safetensors import scan_model
 
@@ -398,6 +400,10 @@ def verify_runtime_corpus(
     if not cases:
         raise ValueError("runtime corpus has no cases")
 
+    process = psutil.Process()
+    rss_before = process.memory_info().rss
+    swap_before = psutil.swap_memory()
+    mx.reset_peak_memory()
     model, tokenizer, stable_store = load_streaming_qwen(
         artifact,
         cache_capacity=cache_capacity,
@@ -504,6 +510,7 @@ def verify_runtime_corpus(
                     "sampler": stable["sampler"],
                 }
             )
+        swap_after = psutil.swap_memory()
         return {
             "artifact": str(artifact.resolve()),
             "corpus": str(corpus_path.resolve()),
@@ -519,6 +526,20 @@ def verify_runtime_corpus(
             "cases": results,
             "stable_store": stable_stats,
             "reference_store": reference_store.stats(),
+            "mlx_active_bytes": mx.get_active_memory(),
+            "mlx_peak_bytes": mx.get_peak_memory(),
+            "process_rss_bytes": {
+                "before_load": rss_before,
+                "after_verification": process.memory_info().rss,
+                "high_water": resource.getrusage(resource.RUSAGE_SELF).ru_maxrss,
+            },
+            "system_swap_bytes": {
+                "before": swap_before.used,
+                "after": swap_after.used,
+                "delta": swap_after.used - swap_before.used,
+                "swap_in_delta": swap_after.sin - swap_before.sin,
+                "swap_out_delta": swap_after.sout - swap_before.sout,
+            },
         }
     finally:
         stable_store.close()
