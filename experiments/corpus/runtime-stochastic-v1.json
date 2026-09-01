@@ -1,0 +1,60 @@
+{
+  "format": "vference.runtime-corpus.v1",
+  "cases": [
+    {
+      "id": "stochastic_explanation",
+      "prompt": "Explain in two concise sentences why exact expert routing matters.",
+      "max_tokens": 32,
+      "sampler": {
+        "temperature": 0.8,
+        "top_p": 0.9,
+        "top_k": 40,
+        "seed": 17
+      }
+    },
+    {
+      "id": "stochastic_code",
+      "prompt": "Write a concise Python function that returns the median of a non-empty list.",
+      "max_tokens": 32,
+      "sampler": {
+        "temperature": 0.7,
+        "top_p": 0.95,
+        "top_k": 50,
+        "seed": 23
+      }
+    },
+    {
+      "id": "stochastic_multilingual",
+      "prompt": "日本語で、ローカルAIの利点を二文で説明してください。",
+      "max_tokens": 32,
+      "sampler": {
+        "temperature": 0.9,
+        "top_p": 0.9,
+        "top_k": 40,
+        "seed": 31
+      }
+    },
+    {
+      "id": "stochastic_structured",
+      "prompt": "Return a compact JSON object describing a healthy inference worker with fields name, active, and queue_depth.",
+      "max_tokens": 32,
+      "sampler": {
+        "temperature": 0.6,
+        "top_p": 0.9,
+        "top_k": 30,
+        "seed": 43
+      }
+    },
+    {
+      "id": "stochastic_reasoning",
+      "prompt": "A cache has 12 slots in each of 40 layers. Briefly calculate the total number of slots.",
+      "max_tokens": 32,
+      "sampler": {
+        "temperature": 0.75,
+        "top_p": 0.92,
+        "top_k": 40,
+        "seed": 59
+      }
+    }
+  ]
+}

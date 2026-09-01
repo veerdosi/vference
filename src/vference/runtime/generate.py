@@ -10,10 +10,10 @@ from pathlib import Path
 import mlx.core as mx
 import numpy as np
 import psutil
-from mlx_lm.sample_utils import make_sampler
 
 from .admission import estimate_qwen35_admission
 from .model import load_streaming_qwen
+from .sampling import make_token_sampler, select_token
 
 QUALIFIED_QWEN35_PREFILL_CHUNK_SIZE = 512
 DECODE_TRANSIENT_RESERVE_BYTES = 448 * 1024**2
@@ -28,26 +28,6 @@ def _detach_last_logits(logits: mx.array) -> mx.array:
         detached = mx.array(np.asarray(value).copy())
     mx.eval(detached)
     return detached
-
-
-def _make_token_sampler(*, temperature: float, top_p: float, top_k: int):
-    if temperature < 0:
-        raise ValueError("temperature must be non-negative")
-    if not 0 < top_p <= 1:
-        raise ValueError("top-p must be greater than zero and at most one")
-    if top_k < 0:
-        raise ValueError("top-k must be non-negative")
-    if temperature == 0:
-        return None
-    return make_sampler(temp=temperature, top_p=top_p, top_k=top_k)
-
-
-def _select_token(logits: mx.array, sampler) -> int:
-    last_logits = logits[:, -1, :]
-    if sampler is None:
-        return int(mx.argmax(last_logits, axis=-1).item())
-    logprobs = last_logits - mx.logsumexp(last_logits, axis=-1, keepdims=True)
-    return int(sampler(logprobs).item())
 
 
 def _validate_prefill_chunk_size(
@@ -220,7 +200,7 @@ def generate_greedy(
         raise ValueError("prefill chunk size must be positive")
     if decode_cache_capacity is not None and decode_cache_capacity < 1:
         raise ValueError("decode expert cache capacity must be positive")
-    sampler = _make_token_sampler(temperature=temperature, top_p=top_p, top_k=top_k)
+    sampler = make_token_sampler(temperature=temperature, top_p=top_p, top_k=top_k)
     if repeat_raw_prompt_to_tokens is not None and repeat_raw_prompt_to_tokens < 1:
         raise ValueError("repeated raw prompt token count must be positive")
     if (needle is None) != (needle_context_tokens is None):
@@ -390,7 +370,7 @@ def generate_greedy(
         eos_ids = set(tokenizer.eos_token_ids)
         for step in range(max_tokens):
             assert logits is not None
-            token_id = _select_token(logits, sampler)
+            token_id = select_token(logits, sampler)
             output_tokens.append(token_id)
             if first_token_at is None:
                 first_token_at = time.perf_counter()

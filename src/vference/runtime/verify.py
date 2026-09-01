@@ -18,6 +18,7 @@ from .expert_store import (
     SynchronousExpertStore,
 )
 from .model import load_streaming_qwen
+from .sampling import make_token_sampler, select_token
 
 
 def _source_experts(
@@ -409,7 +410,9 @@ def verify_runtime_corpus(
     reference_store = None
     try:
 
-        def run_case(case: dict[str, object]) -> tuple[np.ndarray, list[int], str]:
+        def run_case(
+            case: dict[str, object],
+        ) -> tuple[np.ndarray, list[int], str, dict[str, int | float | str]]:
             prompt_tokens = tokenizer.apply_chat_template(
                 [{"role": "user", "content": str(case["prompt"])}],
                 add_generation_prompt=True,
@@ -420,16 +423,41 @@ def verify_runtime_corpus(
             logits = model(mx.array([prompt_tokens]), cache=cache)[:, -1:]
             mx.eval(logits)
             initial = np.asarray(logits.astype(mx.float32)).copy()
+            raw_sampler = case.get("sampler", {})
+            if not isinstance(raw_sampler, dict):
+                raise ValueError(f"case {case['id']} sampler must be an object")
+            temperature = float(raw_sampler.get("temperature", 0.0))
+            top_p = float(raw_sampler.get("top_p", 1.0))
+            top_k = int(raw_sampler.get("top_k", 0))
+            seed = int(raw_sampler.get("seed", 0))
+            sampler = make_token_sampler(
+                temperature=temperature,
+                top_p=top_p,
+                top_k=top_k,
+            )
+            if sampler is not None:
+                mx.random.seed(seed)
             output: list[int] = []
             eos_ids = set(tokenizer.eos_token_ids)
             for _ in range(int(case["max_tokens"])):
-                token = int(mx.argmax(logits[0, -1]).item())
+                token = select_token(logits, sampler)
                 output.append(token)
                 if token in eos_ids:
                     break
                 logits = model(mx.array([[token]]), cache=cache)
                 mx.eval(logits)
-            return initial, output, tokenizer.decode(output)
+            return (
+                initial,
+                output,
+                tokenizer.decode(output),
+                {
+                    "kind": "greedy" if sampler is None else "categorical",
+                    "temperature": temperature,
+                    "top_p": top_p,
+                    "top_k": top_k,
+                    "seed": seed,
+                },
+            )
 
         stable_results = [run_case(case) for case in cases]
         stable_stats = stable_store.stats()
@@ -451,6 +479,7 @@ def verify_runtime_corpus(
                     "stable_output_tokens": stable[1],
                     "reference_output_tokens": reference[1],
                     "output_text": stable[2],
+                    "sampler": stable[3],
                 }
             )
         return {

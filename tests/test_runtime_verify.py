@@ -8,22 +8,21 @@ from vference.runtime.verify import verify_prefill_chunk_invariance
 from vference.runtime.generate import (
     _detach_last_logits,
     _decode_resize_admission,
-    _make_token_sampler,
-    _select_token,
     _store_stats_delta,
     _validate_prefill_chunk_size,
 )
+from vference.runtime.sampling import make_token_sampler, select_token
 
 
 def test_greedy_and_seeded_sampling_are_reproducible() -> None:
     logits = mx.array([[[0.0, 0.5, 1.0, 1.5]]])
-    assert _select_token(logits, None) == 3
+    assert select_token(logits, None) == 3
 
-    sampler = _make_token_sampler(temperature=0.8, top_p=0.9, top_k=3)
+    sampler = make_token_sampler(temperature=0.8, top_p=0.9, top_k=3)
     mx.random.seed(17)
-    first = [_select_token(logits, sampler) for _ in range(16)]
+    first = [select_token(logits, sampler) for _ in range(16)]
     mx.random.seed(17)
-    second = [_select_token(logits, sampler) for _ in range(16)]
+    second = [select_token(logits, sampler) for _ in range(16)]
     assert first == second
 
 
@@ -38,7 +37,7 @@ def test_greedy_and_seeded_sampling_are_reproducible() -> None:
 )
 def test_sampler_validation(kwargs: dict[str, float | int], message: str) -> None:
     with pytest.raises(ValueError, match=message):
-        _make_token_sampler(**kwargs)
+        make_token_sampler(**kwargs)
 
 
 def test_detach_last_logits_preserves_bfloat16_bits() -> None:
