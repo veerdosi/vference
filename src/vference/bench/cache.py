@@ -139,22 +139,39 @@ def _trace_calls(trace: dict) -> tuple[list[list[dict]], list[list[dict]]]:
 
 def _training_counts(
     prefill: list[list[dict]], layer_ids: list[int]
-) -> tuple[dict[int, Counter], dict[tuple[int, int], dict[int, Counter]]]:
+) -> tuple[
+    dict[int, Counter],
+    dict[tuple[int, int], dict[int, Counter]],
+    dict[int, tuple[int, ...]],
+]:
     popularity = {layer_id: Counter() for layer_id in layer_ids}
     transitions: dict[tuple[int, int], dict[int, Counter]] = {}
+    previous_by_layer: dict[int, tuple[int, ...]] = {}
+
+    def update_transition(
+        pair: tuple[int, int], sources: tuple[int, ...], targets: tuple[int, ...]
+    ) -> None:
+        table = transitions.setdefault(pair, {})
+        for source in sources:
+            table.setdefault(source, Counter()).update(targets)
+
     for call in prefill:
         for record in call:
             layer_id = int(record["layer_id"])
             for experts in record["expert_ids"]:
-                popularity[layer_id].update(int(expert) for expert in experts)
+                selected = tuple(int(expert) for expert in experts)
+                popularity[layer_id].update(selected)
+                previous = previous_by_layer.get(layer_id)
+                if previous is not None:
+                    update_transition((layer_id, layer_id), previous, selected)
+                previous_by_layer[layer_id] = selected
         for left, right in zip(call, call[1:]):
             pair = (int(left["layer_id"]), int(right["layer_id"]))
-            table = transitions.setdefault(pair, {})
             for left_experts, right_experts in zip(left["expert_ids"], right["expert_ids"]):
+                sources = tuple(int(expert) for expert in left_experts)
                 targets = tuple(int(expert) for expert in right_experts)
-                for source in left_experts:
-                    table.setdefault(int(source), Counter()).update(targets)
-    return popularity, transitions
+                update_transition(pair, sources, targets)
+    return popularity, transitions, previous_by_layer
 
 
 def _top(counter: Counter, budget: int) -> tuple[int, ...]:
@@ -172,11 +189,17 @@ def _simulate_prefetch(
     predictor: str,
     popularity: dict[int, Counter],
     transitions: dict[tuple[int, int], dict[int, Counter]],
+    initial_previous_by_layer: dict[int, tuple[int, ...]],
 ) -> dict:
     caches = {layer_id: OrderedDict() for layer_id in layer_ids}
     speculative: set[tuple[int, int]] = set()
     demand_hits = demand_misses = prefetch_reads = useful = prediction_existing = 0
     evicted_unused = 0
+    adaptive_transitions = {
+        pair: {source: Counter(counts) for source, counts in table.items()}
+        for pair, table in transitions.items()
+    }
+    previous_by_layer = dict(initial_previous_by_layer)
 
     def insert(layer_id: int, expert_id: int, *, prefetch: bool) -> None:
         nonlocal prefetch_reads, prediction_existing, evicted_unused
@@ -205,7 +228,7 @@ def _simulate_prefetch(
         left_layer: int, right_layer: int, selected: tuple[int, ...]
     ) -> tuple[int, ...]:
         scores = Counter()
-        table = transitions.get((left_layer, right_layer), {})
+        table = adaptive_transitions.get((left_layer, right_layer), {})
         for source in selected:
             scores.update(table.get(source, {}))
         return _top(scores, budget)
@@ -215,6 +238,10 @@ def _simulate_prefetch(
             layer_id = int(record["layer_id"])
             if predictor == "static_popularity":
                 for expert_id in predict_static(layer_id):
+                    insert(layer_id, expert_id, prefetch=True)
+            previous = previous_by_layer.get(layer_id)
+            if predictor == "same_layer_transition" and previous is not None:
+                for expert_id in predict_transition(layer_id, layer_id, previous):
                     insert(layer_id, expert_id, prefetch=True)
             selected = tuple(int(expert) for expert in record["expert_ids"][0])
             for expert_id in selected:
@@ -228,7 +255,23 @@ def _simulate_prefetch(
                 else:
                     demand_misses += 1
                     insert(layer_id, expert_id, prefetch=False)
-            if predictor == "cross_layer_transition" and ordinal + 1 < len(call):
+            if predictor == "cross_layer_adaptive" and ordinal > 0:
+                left_layer = int(call[ordinal - 1]["layer_id"])
+                left_selected = tuple(
+                    int(expert) for expert in call[ordinal - 1]["expert_ids"][0]
+                )
+                table = adaptive_transitions.setdefault((left_layer, layer_id), {})
+                for source in left_selected:
+                    table.setdefault(source, Counter()).update(selected)
+            if predictor == "same_layer_transition" and previous is not None:
+                table = adaptive_transitions.setdefault((layer_id, layer_id), {})
+                for source in previous:
+                    table.setdefault(source, Counter()).update(selected)
+            previous_by_layer[layer_id] = selected
+            if (
+                predictor in {"cross_layer_transition", "cross_layer_adaptive"}
+                and ordinal + 1 < len(call)
+            ):
                 next_layer = int(call[ordinal + 1]["layer_id"])
                 for expert_id in predict_transition(layer_id, next_layer, selected):
                     insert(next_layer, expert_id, prefetch=True)
@@ -268,7 +311,7 @@ def replay_prefetch(
     if not decode:
         raise ValueError("route trace contains no single-token decode calls")
     layer_ids = [int(record["layer_id"]) for record in decode[0]]
-    popularity, transitions = _training_counts(prefill, layer_ids)
+    popularity, transitions, previous_by_layer = _training_counts(prefill, layer_ids)
     baseline = _simulate_prefetch(
         decode,
         layer_ids,
@@ -277,6 +320,7 @@ def replay_prefetch(
         "none",
         popularity,
         transitions,
+        previous_by_layer,
     )
     baseline["demand_read_bytes"] = (
         baseline["exposed_demand_misses"] * record_size
@@ -288,7 +332,12 @@ def replay_prefetch(
     for budget in budgets:
         if budget < 1:
             raise ValueError("prefetch budgets must be positive")
-        for predictor in ("static_popularity", "cross_layer_transition"):
+        for predictor in (
+            "static_popularity",
+            "cross_layer_transition",
+            "cross_layer_adaptive",
+            "same_layer_transition",
+        ):
             result = _simulate_prefetch(
                 decode,
                 layer_ids,
@@ -297,6 +346,7 @@ def replay_prefetch(
                 predictor,
                 popularity,
                 transitions,
+                previous_by_layer,
             )
             result["demand_misses_avoided"] = (
                 baseline["exposed_demand_misses"] - result["exposed_demand_misses"]

@@ -1,0 +1,25 @@
+{
+  "format": "vference.prefetch-corpus.v1",
+  "cases": [
+    {
+      "id": "code",
+      "prompt": "Implement a concise Python LRUCache class with get and put methods, type hints, explanatory comments, and a small usage example.",
+      "max_tokens": 128
+    },
+    {
+      "id": "multilingual",
+      "prompt": "日本語で、Apple Silicon上で大規模なAIモデルを効率よく実行する際の課題を、技術者向けに詳しく説明してください。",
+      "max_tokens": 128
+    },
+    {
+      "id": "structured_json",
+      "prompt": "Return only a compact JSON array containing 20 objects. Each object must have integer id, string name, boolean active, and an array of three string tags.",
+      "max_tokens": 128
+    },
+    {
+      "id": "reasoning",
+      "prompt": "Explain step by step how to schedule CPU work, SSD reads, and GPU kernels for a sparse mixture-of-experts decoder. Discuss dependencies, overlap opportunities, and failure cases.",
+      "max_tokens": 128
+    }
+  ]
+}
