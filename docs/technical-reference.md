@@ -509,8 +509,9 @@ measured 1.944 tok/s versus a 1.862 tok/s control; both are below the 2 tok/s
 absolute gate. The Mac was observed on battery after the runs, but power source
 is benchmark metadata rather than a separate qualification target or an
 assumed cause of the difference from historical measurements.
-`adaptive_cross` with budget one remains opt-in and the default remains no prefetch until it
-passes the sustained gate in the Mac's current operating state. See
+`adaptive_cross` with budget one remains opt-in and the default remains no
+prefetch until it passes the sustained gate in the Mac's current operating
+state. See
 `experiments/runtime/stage4-prefetch-replay-2026-09-01.json` and
 `experiments/runtime/stage4-live-prefetch-2026-09-01.json`.
 
@@ -527,6 +528,23 @@ initial-logit error. The earlier repetition increased swap occupancy by 145.6
 MB and throughput varied materially, so budget two remains opt-in rather than
 becoming the default. See
 `experiments/runtime/stage4-prefetch-budget2-2026-09-01.json`.
+
+Unrestricted budgets three and four are rejected without live testing. On the
+code trace, budget three made exposed misses worse than no prefetch and raised
+physical reads 22.2%; budget four raised them 36.3%. The selected refinement
+instead requires eight causal transition observations before publishing a
+prediction candidate (the score threshold scales with route width, so this is
+64 for Qwen's top-8 router). With budget two this reduced exposed misses on all
+six stored traces and capped worst-case ideal-replay amplification at 5.07%; it
+did not suppress any prediction on the strongly trained 8K trace. Three exact
+128-token code runs measured 2.731, 2.872, and 2.466 tok/s (mean 2.690, sample
+standard deviation 0.206), 14.5% above the no-prefetch control and 10.3% above
+the budget-one mean. Mean physical-read amplification was 3.13%, every run had
+flat swap occupancy, and the five-domain corpus again had exact tokens and zero
+logit error. Eight observations is now the safer default threshold when
+adaptive prefetch is explicitly enabled; no prefetch remains the runtime
+default because performance still varies with host state. See
+`experiments/runtime/stage4-confidence-gated-prefetch-2026-09-01.json`.
 
 ### 5.7 Prefill is a separate operating mode
 
@@ -969,8 +987,10 @@ online-adaptive successor cleared a six-trace gate and now has a bounded,
 exact-demand-only live staging implementation. A two-record budget cleared the
 absolute 8K throughput threshold in two output-exact runs and passed the
 five-domain exact corpus. It remains opt-in because swap occupancy and
-throughput varied across the two host-state samples; broader live and pressure
-cases remain.
+throughput varied across host-state samples. A route-width-normalized
+eight-observation confidence gate now limits noisy second predictions and
+clears the six-trace replay gate plus the live five-domain exact corpus;
+broader live and pressure cases remain.
 
 ### Stage 5 — bounded prefill and long contexts
 

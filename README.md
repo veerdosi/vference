@@ -73,17 +73,22 @@ cases remain.
 Stage 4 also includes an opt-in one-record adaptive cross-layer prefetcher. It
 stages bytes in CPU memory and publishes them only when the exact router later
 requests that expert; synchronous exact demand remains the fallback. Enable it
-with `--prefetch-policy adaptive_cross --prefetch-budget 1`. It improved a short code workload by
-3.8% and the 8K workload by 4.4% with exact outputs, but the measured 8K result
-was 1.944 tok/s and therefore remains below the 2 tok/s gate. Power source is
-recorded as metadata, not treated as a separate runtime qualification.
+with budget one and explicitly set one observation:
+`--prefetch-policy adaptive_cross --prefetch-budget 1 --prefetch-min-observations 1`.
+It improved a short code workload by 3.8% and the 8K workload by 4.4% with exact
+outputs, but the measured 8K result was 1.944 tok/s and therefore remains below
+the 2 tok/s gate. Power source is recorded as metadata, not treated as a
+separate runtime qualification.
 
 A two-record budget is the current faster experimental setting:
-`--prefetch-policy adaptive_cross --prefetch-budget 2`. Two exact 8K runs
-measured 2.159 and 2.495 decode tok/s, and the five-domain corpus retained exact
-tokens with zero initial-logit error. It remains opt-in because throughput and
-system-wide swap occupancy varied between repetitions. Keep the qualified
-prefill chunk at 512: a 256-token chunk changed the output sequence even with
-prefetch disabled and is rejected until chunk-boundary invariance is fixed.
-Non-512 multi-chunk generation therefore requires the explicit experimental
+`--prefetch-policy adaptive_cross --prefetch-budget 2`. The default confidence
+gate waits for eight causal route observations before staging a candidate.
+Three exact short-code runs averaged 2.690 decode tok/s with 3.13% physical-read
+amplification, while the stored 8K route retained the same predictions as the
+earlier unrestricted budget-two policy. The five-domain corpus retained exact
+tokens with zero initial-logit error. Prefetch remains opt-in because host-state
+performance still varies. Keep the qualified prefill chunk at 512: a 256-token
+chunk changed the output sequence even with prefetch disabled and is rejected
+until chunk-boundary invariance is fixed. Non-512 multi-chunk generation
+therefore requires the explicit experimental
 `--allow-unqualified-prefill-chunk-size` override.

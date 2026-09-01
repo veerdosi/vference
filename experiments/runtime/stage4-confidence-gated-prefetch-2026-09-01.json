@@ -1,0 +1,174 @@
+{
+  "artifact": {
+    "expert_pack_bytes": 18119393280,
+    "expert_pack_sha256": "9b26ebdf13a2863d607e1c3ea6e2528ff0267b7f472f8fd37fd20d3adb497e18",
+    "model_revision": "1e20fd8d42056f870933bf98ca6211024744f7ec",
+    "repository": "mlx-community/Qwen3.5-35B-A3B-4bit"
+  },
+  "benchmark_commit": "759999336a3cf869e7a9a1da9eccb59d0845d562",
+  "benchmark_window_local": "2026-09-01T18:31:00+08:00/2026-09-01T18:52:21+08:00",
+  "cache_state": "Each live process began with an empty 320-record stable expert cache; experts.pack used F_NOCACHE.",
+  "correctness": {
+    "code_output_token_count": 128,
+    "code_output_token_sha256": "eecf59a4bd1b02a4ef1bbf2c74ce5b9cb367e873cadb56e71bdea6993ece20d7",
+    "five_domain_all_tokens_exact": true,
+    "five_domain_case_count": 5,
+    "five_domain_max_initial_logits_abs_error": 0.0,
+    "five_domain_result": "/tmp/vference-prefetch-support64-corpus.json",
+    "prefetch_failures": 0
+  },
+  "decision": {
+    "recommended_policy": "budget=2, min_observations=8 when adaptive_cross is explicitly enabled",
+    "reason": "Eight observations preserved an 8K policy identical to unrestricted budget two while sharply reducing short-domain read amplification. Three exact code runs averaged 14.5% above no prefetch and 10.3% above budget one, but host-state throughput variance remains material.",
+    "runtime_default": "none",
+    "status": "confidence-gated adaptive prefetch remains opt-in"
+  },
+  "dependencies": {
+    "mlx": "0.32.2",
+    "mlx_lm": "0.31.3",
+    "nanobind": "2.15.0"
+  },
+  "hardware": {
+    "chip": "Apple M2",
+    "internal_free_bytes_after": 54458667008,
+    "memory_bytes": 8589934592,
+    "model": "Mac14,2",
+    "power": "AC observed after the committed live repetition; metadata only",
+    "storage": "Internal APFS /dev/disk3s5 over Apple Fabric",
+    "thermal": "pmset reported no thermal, performance, or CPU power warning after the committed repetition"
+  },
+  "live_code_repetitions": {
+    "common": {
+      "cache_capacity_records": 320,
+      "decode_cache_policy": "layer",
+      "generated_tokens": 128,
+      "peak_mlx_bytes": 2057193554,
+      "prefetch_budget": 2,
+      "prefetch_min_observations": 8,
+      "prefetch_policy": "adaptive_cross",
+      "prefill_cache_policy": "global",
+      "prefill_chunk_size": 512,
+      "prompt_tokens": 38
+    },
+    "comparison": {
+      "mean_physical_read_amplification_vs_no_prefetch": 1.0313309946596265,
+      "mean_physical_read_reduction_vs_unrestricted_budget2_percent": 3.3277964224776024,
+      "mean_throughput_improvement_vs_budget1_percent": 10.348406859765902,
+      "mean_throughput_improvement_vs_no_prefetch_percent": 14.518772637907373,
+      "mean_throughput_improvement_vs_unrestricted_budget2_percent": 8.584258560226509,
+      "no_prefetch_control_tokens_per_second": 2.3486072979804105,
+      "unrestricted_budget2_tokens_per_second": 2.476967
+    },
+    "runs": [
+      {
+        "decode_p50_seconds": 0.3610022919892799,
+        "decode_p95_seconds": 0.46417149997432716,
+        "decode_tokens_per_second": 2.730918079772486,
+        "expert_physical_bytes": 50467110912,
+        "prefetch_late": 31,
+        "prefetch_useful": 923,
+        "prefetch_wrong": 874,
+        "swap_delta_bytes": 0,
+        "swap_out_delta_bytes": 4702208,
+        "time_to_first_token_seconds": 5.410113583988277
+      },
+      {
+        "decode_p50_seconds": 0.3509340830205474,
+        "decode_p95_seconds": 0.43603375001112,
+        "decode_tokens_per_second": 2.8720087680125985,
+        "expert_physical_bytes": 50470649856,
+        "prefetch_late": 23,
+        "prefetch_useful": 917,
+        "prefetch_wrong": 873,
+        "swap_delta_bytes": 0,
+        "swap_out_delta_bytes": 458752,
+        "time_to_first_token_seconds": 5.132054707995849
+      },
+      {
+        "commit": "759999336a3cf869e7a9a1da9eccb59d0845d562",
+        "decode_p50_seconds": 0.3995240410149563,
+        "decode_p95_seconds": 0.5167622499866411,
+        "decode_tokens_per_second": 2.465861907409374,
+        "expert_physical_bytes": 50444107776,
+        "prefetch_late": 46,
+        "prefetch_useful": 911,
+        "prefetch_wrong": 863,
+        "result": "/tmp/vference-code-budget2-observations8-7599993.result.json",
+        "swap_delta_bytes": 0,
+        "swap_out_delta_bytes": 2375680,
+        "time_to_first_token_seconds": 5.424956167000346,
+        "trace": "/tmp/vference-code-budget2-observations8-7599993.trace.json"
+      }
+    ],
+    "summary": {
+      "decode_tokens_per_second_max": 2.8720087680125985,
+      "decode_tokens_per_second_mean": 2.6895962517314858,
+      "decode_tokens_per_second_min": 2.465861907409374,
+      "decode_tokens_per_second_sample_stddev": 0.2062024204488182,
+      "expert_physical_bytes_mean": 50460622848
+    }
+  },
+  "offline_gate": {
+    "configuration": {
+      "cache_capacity_per_layer": 8,
+      "min_observations": 8,
+      "prefetch_budget": 2,
+      "predictor": "cross_layer_adaptive"
+    },
+    "rejected_larger_budgets": {
+      "budget3_code_demand_misses_avoided": -36,
+      "budget3_code_physical_read_amplification": 1.222378260716919,
+      "budget4_code_demand_misses_avoided": -874,
+      "budget4_code_physical_read_amplification": 1.3633395358634974,
+      "result": "Rejected without live testing"
+    },
+    "traces": [
+      {
+        "demand_misses_avoided": 10049,
+        "physical_read_amplification": 1.0087290748588564,
+        "prompt_tokens": 7936,
+        "useful_prefetch_rate": 0.8078545318211641,
+        "workload": "8k repeated raw"
+      },
+      {
+        "demand_misses_avoided": 1459,
+        "physical_read_amplification": 1.0484871329198506,
+        "prompt_tokens": 35,
+        "useful_prefetch_rate": 0.5022149685241315,
+        "workload": "technical"
+      },
+      {
+        "demand_misses_avoided": 367,
+        "physical_read_amplification": 1.0507320155882456,
+        "prompt_tokens": 38,
+        "useful_prefetch_rate": 0.5,
+        "workload": "code"
+      },
+      {
+        "demand_misses_avoided": 1035,
+        "physical_read_amplification": 1.0235621306346325,
+        "prompt_tokens": 40,
+        "useful_prefetch_rate": 0.6370820668693009,
+        "workload": "multilingual"
+      },
+      {
+        "demand_misses_avoided": 936,
+        "physical_read_amplification": 1.0260347532279475,
+        "prompt_tokens": 45,
+        "useful_prefetch_rate": 0.5697609783212896,
+        "workload": "structured JSON"
+      },
+      {
+        "demand_misses_avoided": 1312,
+        "physical_read_amplification": 1.0307191904589807,
+        "prompt_tokens": 48,
+        "useful_prefetch_rate": 0.6048064085447263,
+        "workload": "reasoning"
+      }
+    ]
+  },
+  "operating_system": {
+    "build": "25G83",
+    "version": "26.6.2"
+  }
+}
