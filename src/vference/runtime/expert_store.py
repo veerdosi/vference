@@ -83,6 +83,7 @@ class SynchronousExpertStore:
             for item in index["components"]
         )
         self.record_crc32 = self._record_checksums(index)
+        self._integrity_verified = bytearray(len(self.record_crc32))
         self._validate_layout()
         self.capacity = capacity
         self._fd = os.open(self.artifact / "experts.pack", os.O_RDONLY)
@@ -180,13 +181,16 @@ class SynchronousExpertStore:
                 f"short expert read for ({layer_id}, {expert_id}): "
                 f"{len(record)} != {self.record_size}"
             )
-        expected_crc32 = self.record_crc32[offset // self.record_size]
-        actual_crc32 = zlib.crc32(record)
-        if actual_crc32 != expected_crc32:
-            raise OSError(
-                f"expert CRC32 mismatch for ({layer_id}, {expert_id}): "
-                f"{actual_crc32:08x} != {expected_crc32:08x}"
-            )
+        record_index = offset // self.record_size
+        if not self._integrity_verified[record_index]:
+            expected_crc32 = self.record_crc32[record_index]
+            actual_crc32 = zlib.crc32(record)
+            if actual_crc32 != expected_crc32:
+                raise OSError(
+                    f"expert CRC32 mismatch for ({layer_id}, {expert_id}): "
+                    f"{actual_crc32:08x} != {expected_crc32:08x}"
+                )
+            self._integrity_verified[record_index] = 1
         materialize_started = time.perf_counter_ns()
         arrays = {
             component.suffix: self._array(
@@ -290,7 +294,8 @@ class SynchronousExpertStore:
         return {
             "capacity": self.capacity,
             "nocache": self.nocache,
-            "record_integrity": "crc32",
+            "record_integrity": "crc32_on_first_load",
+            "integrity_records_verified": sum(self._integrity_verified),
             "resident": len(self._cache),
             "hits": self.hits,
             "misses": self.misses,
@@ -358,6 +363,7 @@ class StableSlotExpertStore(SynchronousExpertStore):
             for item in index["components"]
         )
         self.record_crc32 = self._record_checksums(index)
+        self._integrity_verified = bytearray(len(self.record_crc32))
         self._validate_layout()
         self.capacity = capacity
         self.nocache = nocache
@@ -497,15 +503,23 @@ class StableSlotExpertStore(SynchronousExpertStore):
         key = (layer_id, expert_id)
         slot = self._allocate_slot(key, protected)
         file_offset = self._record_offset(layer_id, expert_id)
+        record_index = file_offset // self.record_size
+        expected_crc32 = (
+            -1
+            if self._integrity_verified[record_index]
+            else self.record_crc32[record_index]
+        )
         started = time.perf_counter_ns()
         count = self._reader.read_into(
             self._ordered_pools,
             slot,
             file_offset,
             self._segment_bytes,
-            self.record_crc32[file_offset // self.record_size],
+            expected_crc32,
         )
         read_ns = time.perf_counter_ns() - started
+        if expected_crc32 >= 0:
+            self._integrity_verified[record_index] = 1
         if count != self.record_size:
             raise OSError(
                 f"short expert read for ({layer_id}, {expert_id}): "
