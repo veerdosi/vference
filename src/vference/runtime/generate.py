@@ -32,6 +32,19 @@ def _state_bytes(cache: list[object]) -> int:
     return sum(int(getattr(item, "nbytes", 0)) for item in cache)
 
 
+def _memory_snapshot() -> dict[str, int | float]:
+    value = psutil.virtual_memory()
+    return {
+        "available": value.available,
+        "used": value.used,
+        "free": value.free,
+        "active": value.active,
+        "inactive": value.inactive,
+        "wired": getattr(value, "wired", 0),
+        "percent": value.percent,
+    }
+
+
 def generate_greedy(
     artifact: Path,
     prompt: str,
@@ -71,7 +84,8 @@ def generate_greedy(
         effective_decode_cache_policy = "layer" if store_kind == "stable" else cache_policy
     process = psutil.Process()
     rss_before = process.memory_info().rss
-    swap_before = psutil.swap_memory().used
+    memory_before = _memory_snapshot()
+    swap_before = psutil.swap_memory()
     load_started = time.perf_counter()
     model, tokenizer, store = load_streaming_qwen(
         artifact,
@@ -84,6 +98,7 @@ def generate_greedy(
         prefetch_budget=prefetch_budget,
     )
     load_seconds = time.perf_counter() - load_started
+    memory_after_load = _memory_snapshot()
     try:
         prompt_mode = "chat" if chat_template else "raw"
         if needle is not None and needle_context_tokens is not None:
@@ -173,6 +188,7 @@ def generate_greedy(
             chunk_memory["cache_bytes_after_clear"] = mx.get_cache_memory()
             prefill_chunks.append(chunk_memory)
         prefill_seconds = time.perf_counter() - prefill_started
+        memory_after_prefill = _memory_snapshot()
 
         if effective_decode_cache_policy != cache_policy:
             if store_kind != "stable":
@@ -193,7 +209,8 @@ def generate_greedy(
             mx.eval(logits)
             decode_latencies.append(time.perf_counter() - started)
 
-        swap_after = psutil.swap_memory().used
+        swap_after = psutil.swap_memory()
+        memory_after_generation = _memory_snapshot()
         result = {
             "prompt": prompt,
             "chat_template": chat_template,
@@ -233,10 +250,18 @@ def generate_greedy(
                 "after_generation": process.memory_info().rss,
                 "high_water": resource.getrusage(resource.RUSAGE_SELF).ru_maxrss,
             },
+            "system_memory_bytes": {
+                "before_load": memory_before,
+                "after_load": memory_after_load,
+                "after_prefill": memory_after_prefill,
+                "after_generation": memory_after_generation,
+            },
             "system_swap_bytes": {
-                "before": swap_before,
-                "after": swap_after,
-                "delta": swap_after - swap_before,
+                "before": swap_before.used,
+                "after": swap_after.used,
+                "delta": swap_after.used - swap_before.used,
+                "swap_in_delta": swap_after.sin - swap_before.sin,
+                "swap_out_delta": swap_after.sout - swap_before.sout,
             },
         }
         if trace_output is not None:
