@@ -144,6 +144,10 @@ def _stream_generate(args: argparse.Namespace) -> None:
             prefetch_budget=args.prefetch_budget,
             prefetch_min_observations=args.prefetch_min_observations,
             allow_unqualified_prefill_chunk_size=(args.allow_unqualified_prefill_chunk_size),
+            temperature=args.temperature,
+            top_p=args.top_p,
+            top_k=args.top_k,
+            seed=args.seed,
         )
     )
 
@@ -281,6 +285,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     generate_parser.add_argument("--prefetch-budget", type=int, default=1)
     generate_parser.add_argument("--prefetch-min-observations", type=int, default=8)
+    generate_parser.add_argument("--temperature", type=float, default=0.0)
+    generate_parser.add_argument("--top-p", type=float, default=1.0)
+    generate_parser.add_argument("--top-k", type=int, default=0)
+    generate_parser.add_argument("--seed", type=int, default=0)
     generate_parser.set_defaults(func=_stream_generate)
 
     multi_turn_parser = commands.add_parser("multi-turn-verify")
