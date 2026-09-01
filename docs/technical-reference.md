@@ -509,7 +509,7 @@ measured 1.944 tok/s versus a 1.862 tok/s control; both are below the 2 tok/s
 absolute gate. The Mac was observed on battery after the runs, but power source
 is benchmark metadata rather than a separate qualification target or an
 assumed cause of the difference from historical measurements.
-`adaptive_cross_1` remains opt-in and the default remains no prefetch until it
+`adaptive_cross` with budget one remains opt-in and the default remains no prefetch until it
 passes the sustained gate in the Mac's current operating state. See
 `experiments/runtime/stage4-prefetch-replay-2026-09-01.json` and
 `experiments/runtime/stage4-live-prefetch-2026-09-01.json`.

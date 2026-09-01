@@ -40,3 +40,22 @@ def test_admission_rejects_the_measured_unsafe_cache_budget() -> None:
     )
     assert safe.admitted
     assert not unsafe.admitted
+
+    with_prefetch = estimate_qwen35_admission(
+        CONFIG,
+        resident_bytes=1_945_100_000,
+        total_tokens=8192,
+        prefill_chunk_size=512,
+        budget_bytes=budget,
+        runtime_reserve_bytes=18 * 1024**2,
+    )
+    oversized_runtime = estimate_qwen35_admission(
+        CONFIG,
+        resident_bytes=1_945_100_000,
+        total_tokens=8192,
+        prefill_chunk_size=512,
+        budget_bytes=budget,
+        runtime_reserve_bytes=64 * 1024**2,
+    )
+    assert with_prefetch.admitted
+    assert not oversized_runtime.admitted

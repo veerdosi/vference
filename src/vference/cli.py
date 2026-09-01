@@ -139,6 +139,7 @@ def _stream_generate(args: argparse.Namespace) -> None:
                 else None
             ),
             prefetch_policy=args.prefetch_policy,
+            prefetch_budget=args.prefetch_budget,
         )
     )
 
@@ -162,6 +163,7 @@ def _corpus_verify(args: argparse.Namespace) -> None:
         args.corpus,
         cache_capacity=args.cache_capacity,
         prefetch_policy=args.prefetch_policy,
+        prefetch_budget=args.prefetch_budget,
     )
     print_json(result)
     if not result["all_tokens_exact"]:
@@ -245,9 +247,10 @@ def build_parser() -> argparse.ArgumentParser:
     generate_parser.add_argument("--max-mlx-memory-gib", type=float)
     generate_parser.add_argument(
         "--prefetch-policy",
-        choices=("none", "adaptive_cross_1"),
+        choices=("none", "adaptive_cross"),
         default="none",
     )
+    generate_parser.add_argument("--prefetch-budget", type=int, default=1)
     generate_parser.set_defaults(func=_stream_generate)
 
     multi_turn_parser = commands.add_parser("multi-turn-verify")
@@ -264,9 +267,10 @@ def build_parser() -> argparse.ArgumentParser:
     corpus_parser.add_argument("--cache-capacity", type=int, default=320)
     corpus_parser.add_argument(
         "--prefetch-policy",
-        choices=("none", "adaptive_cross_1"),
+        choices=("none", "adaptive_cross"),
         default="none",
     )
+    corpus_parser.add_argument("--prefetch-budget", type=int, default=1)
     corpus_parser.set_defaults(func=_corpus_verify)
 
     replay_parser = commands.add_parser("route-replay")

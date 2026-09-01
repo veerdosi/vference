@@ -25,6 +25,7 @@ def load_streaming_qwen(
     store_kind: str = "python",
     cache_policy: str = "global",
     prefetch_policy: str = "none",
+    prefetch_budget: int = 1,
 ) -> tuple[Model, object, SynchronousExpertStore]:
     """Load the resident text core and attach exact synchronous expert streaming."""
     artifact = artifact.resolve()
@@ -46,6 +47,7 @@ def load_streaming_qwen(
     if store_kind == "stable":
         store_kwargs["cache_policy"] = cache_policy
         store_kwargs["prefetch_policy"] = prefetch_policy
+        store_kwargs["prefetch_budget"] = prefetch_budget
     elif cache_policy != "global":
         raise ValueError("the Python reference store only supports global LRU")
     elif prefetch_policy != "none":

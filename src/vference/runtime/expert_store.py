@@ -314,6 +314,7 @@ class StableSlotExpertStore(SynchronousExpertStore):
         trace_routes: bool = False,
         cache_policy: str = "global",
         prefetch_policy: str = "none",
+        prefetch_budget: int = 1,
     ) -> None:
         if capacity < 1:
             raise ValueError("expert cache capacity must be positive")
@@ -343,9 +344,12 @@ class StableSlotExpertStore(SynchronousExpertStore):
         self.capacity = capacity
         self.nocache = nocache
         self.trace_routes = trace_routes
-        if prefetch_policy not in {"none", "adaptive_cross_1"}:
+        if prefetch_policy not in {"none", "adaptive_cross"}:
             raise ValueError(f"unknown prefetch policy: {prefetch_policy}")
+        if not 1 <= prefetch_budget <= 8:
+            raise ValueError("prefetch budget must be between one and eight records")
         self.prefetch_policy = prefetch_policy
+        self.prefetch_budget = prefetch_budget
         if cache_policy not in {"global", "layer", "demand"}:
             raise ValueError(f"unknown stable cache policy: {cache_policy}")
         if cache_policy == "layer" and capacity < self.layer_count:
@@ -406,9 +410,7 @@ class StableSlotExpertStore(SynchronousExpertStore):
         self._previous_layer_route: tuple[int, np.ndarray] | None = None
         self._prefetch_fd = -1
         self._prefetch_executor: ThreadPoolExecutor | None = None
-        self._pending_prefetch: (
-            tuple[tuple[int, int], Future[bytes]] | None
-        ) = None
+        self._pending_prefetch: dict[tuple[int, int], Future[bytes]] = {}
         self.prefetch_submitted = 0
         self.prefetch_bytes_read = 0
         self.prefetch_useful = 0
@@ -435,8 +437,8 @@ class StableSlotExpertStore(SynchronousExpertStore):
         if self._prefetch_executor is not None:
             self._prefetch_executor.shutdown(wait=True, cancel_futures=True)
             self._prefetch_executor = None
-        if self._pending_prefetch is not None:
-            self._finish_prefetch()
+        for key in list(self._pending_prefetch):
+            self._finish_prefetch(key)
         if self._prefetch_fd >= 0:
             os.close(self._prefetch_fd)
             self._prefetch_fd = -1
@@ -499,13 +501,12 @@ class StableSlotExpertStore(SynchronousExpertStore):
                 np.add.at(table, (sources, targets), 1)
         self._previous_layer_route = (layer_id, routes.copy())
 
-    def _finish_prefetch(self) -> bytes | None:
-        pending = self._pending_prefetch
-        if pending is None:
+    def _finish_prefetch(self, key: tuple[int, int]) -> bytes | None:
+        future = self._pending_prefetch.pop(key, None)
+        if future is None:
             return None
-        self._pending_prefetch = None
         try:
-            record = pending[1].result()
+            record = future.result()
         except Exception:
             self.prefetch_failed += 1
             return None
@@ -518,27 +519,24 @@ class StableSlotExpertStore(SynchronousExpertStore):
     def _retire_prefetch(
         self, layer_id: int, requested: set[tuple[int, int]]
     ) -> None:
-        pending = self._pending_prefetch
-        if pending is None or pending[0][0] != layer_id:
-            return
-        key, future = pending
-        if key in requested and key not in self._cache:
-            return
-        self.prefetch_wrong += 1
-        if future.cancel():
-            self.prefetch_cancelled += 1
-            self._pending_prefetch = None
-        elif future.done():
-            self._finish_prefetch()
-            self.prefetch_unused += 1
+        for key, future in list(self._pending_prefetch.items()):
+            if key[0] != layer_id or (key in requested and key not in self._cache):
+                continue
+            self.prefetch_wrong += 1
+            if future.cancel():
+                self.prefetch_cancelled += 1
+                del self._pending_prefetch[key]
+            elif future.done():
+                self._finish_prefetch(key)
+                self.prefetch_unused += 1
 
     def _take_prefetched(self, key: tuple[int, int]) -> bytes | None:
-        pending = self._pending_prefetch
-        if pending is None or pending[0] != key:
+        future = self._pending_prefetch.get(key)
+        if future is None:
             return None
-        ready = pending[1].done()
+        ready = future.done()
         wait_started = time.perf_counter_ns()
-        record = self._finish_prefetch()
+        record = self._finish_prefetch(key)
         waited = time.perf_counter_ns() - wait_started
         if record is None:
             return None
@@ -548,31 +546,34 @@ class StableSlotExpertStore(SynchronousExpertStore):
             self.prefetch_wait_ns += waited
         return record
 
-    def _submit_prefetch(self, layer_id: int, expert_id: int) -> None:
+    def _submit_prefetch(self, layer_id: int, expert_ids: tuple[int, ...]) -> None:
         if self._prefetch_executor is None:
             return
-        key = (layer_id, expert_id)
-        if key in self._cache:
-            self.prefetch_already_resident += 1
-            return
-        if self._pending_prefetch is not None:
-            if self._pending_prefetch[1].done():
-                self._finish_prefetch()
+        for key, future in list(self._pending_prefetch.items()):
+            if key[0] < layer_id and future.done():
+                self._finish_prefetch(key)
                 self.prefetch_unused += 1
-            else:
+        for expert_id in expert_ids:
+            key = (layer_id, expert_id)
+            if key in self._cache:
+                self.prefetch_already_resident += 1
+                continue
+            if key in self._pending_prefetch:
+                continue
+            if len(self._pending_prefetch) >= self.prefetch_budget:
                 self.prefetch_skipped_busy += 1
-                return
-        future = self._prefetch_executor.submit(
-            os.pread,
-            self._prefetch_fd,
-            self.record_size,
-            self._record_offset(layer_id, expert_id),
-        )
-        self._pending_prefetch = (key, future)
-        self.prefetch_submitted += 1
+                break
+            future = self._prefetch_executor.submit(
+                os.pread,
+                self._prefetch_fd,
+                self.record_size,
+                self._record_offset(layer_id, expert_id),
+            )
+            self._pending_prefetch[key] = future
+            self.prefetch_submitted += 1
 
     def _predict_next(self, layer_id: int, host_indices: np.ndarray) -> None:
-        if self.prefetch_policy != "adaptive_cross_1":
+        if self.prefetch_policy != "adaptive_cross":
             return
         try:
             next_layer = self.layer_ids[self._layer_ordinals[layer_id] + 1]
@@ -585,10 +586,17 @@ class StableSlotExpertStore(SynchronousExpertStore):
         if table is None:
             return
         scores = table[routes[0]].sum(axis=0, dtype=np.uint64)
-        expert_id = int(np.argmax(scores))
-        if scores[expert_id] == 0:
+        ranked = sorted(
+            range(self.expert_count), key=lambda expert_id: (-int(scores[expert_id]), expert_id)
+        )
+        selected = tuple(
+            expert_id
+            for expert_id in ranked[: self.prefetch_budget]
+            if scores[expert_id] > 0
+        )
+        if not selected:
             return
-        self._submit_prefetch(next_layer, expert_id)
+        self._submit_prefetch(next_layer, selected)
 
     def _record_offset(self, layer_id: int, expert_id: int) -> int:
         try:
@@ -789,6 +797,7 @@ class StableSlotExpertStore(SynchronousExpertStore):
         values["implementation"] = "stable_native_slots"
         values["cache_policy"] = self.cache_policy
         values["prefetch_policy"] = self.prefetch_policy
+        values["prefetch_budget"] = self.prefetch_budget
         values["policy_transitions"] = list(self.policy_transitions)
         values["prefetch"] = {
             "submitted": self.prefetch_submitted,

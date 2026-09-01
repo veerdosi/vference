@@ -299,7 +299,8 @@ def test_adaptive_prefetch_stages_only_then_publishes_exact_demand(
         tmp_path,
         capacity=4,
         cache_policy="layer",
-        prefetch_policy="adaptive_cross_1",
+        prefetch_policy="adaptive_cross",
+        prefetch_budget=2,
     ) as store:
         first = np.asarray([[[0, 1]]], dtype=np.int64)
         second = np.asarray([[[1, 2]]], dtype=np.int64)
@@ -308,11 +309,14 @@ def test_adaptive_prefetch_stages_only_then_publishes_exact_demand(
         store._observe_transition(0, first)
         store._predict_next(0, first)
         assert not store._cache
-        slots = store._resolve_slots(1, np.asarray([[[1, 0]]], dtype=np.int64))
+        slots = store._resolve_slots(1, np.asarray([[[1, 2]]], dtype=np.int64))
         stats = store.stats()["prefetch"]
-        assert stats["submitted"] == 1
-        assert stats["useful"] == 1
+        assert stats["submitted"] == 2
+        assert stats["useful"] == 2
         assert stats["failed"] == 0
-        predicted_slot = int(slots[0, 0, 0])
-        copied = int(np.asarray(store._pools[suffixes[0]])[predicted_slot, 0])
-        assert copied == 40
+        predicted_slots = [int(slots[0, 0, index]) for index in range(2)]
+        copied = [
+            int(np.asarray(store._pools[suffixes[0]])[slot, 0])
+            for slot in predicted_slots
+        ]
+        assert copied == [40, 50]
