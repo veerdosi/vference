@@ -1,4 +1,5 @@
 import json
+import os
 from pathlib import Path
 
 import mlx.core as mx
@@ -216,6 +217,12 @@ def test_stable_slots_match_math_and_keep_addresses(tmp_path: Path) -> None:
         assert stable.stats()["capacity_transitions"] == [{"from": 2, "to": 3}]
         after_resize = stable.execute(0, x, mx.array([[[0, 1]]], dtype=mx.int32))
         mx.eval(after_resize)
+        pack_path = tmp_path / "experts.pack"
+        original_pack = pack_path.read_bytes()
+        pack_path.write_bytes(bytes([original_pack[0] ^ 1]) + original_pack[1:])
+        with pytest.raises(OSError, match="changed after runtime integrity admission"):
+            stable.validate_source_unchanged()
+        pack_path.write_bytes(original_pack)
 
     with SynchronousExpertStore(tmp_path, capacity=2) as reference:
         expected_first = reference.execute(0, x, mx.array([[[0, 1]]], dtype=mx.int32))
@@ -258,7 +265,7 @@ def test_stable_slots_match_math_and_keep_addresses(tmp_path: Path) -> None:
 
 
 def test_adaptive_prefetch_stages_only_then_publishes_exact_demand(
-    tmp_path: Path,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     suffixes = (
         "gate_proj.weight",
@@ -328,4 +335,31 @@ def test_adaptive_prefetch_stages_only_then_publishes_exact_demand(
         assert stats["failed"] == 0
         predicted_slots = [int(slots[0, 0, index]) for index in range(2)]
         copied = [int(np.asarray(store._pools[suffixes[0]])[slot, 0]) for slot in predicted_slots]
+        assert copied == [40, 50]
+
+    def failed_prefetch(*_: object) -> bytes:
+        raise OSError("injected speculative read failure")
+
+    with StableSlotExpertStore(
+        tmp_path,
+        capacity=4,
+        cache_policy="layer",
+        prefetch_policy="adaptive_cross",
+        prefetch_budget=2,
+        prefetch_min_observations=2,
+    ) as store:
+        store._observe_transition(0, first)
+        store._observe_transition(1, second)
+        store._observe_transition(0, first)
+        store._observe_transition(1, second)
+        store._observe_transition(0, first)
+        monkeypatch.setattr(os, "pread", failed_prefetch)
+        store._predict_next(0, first)
+        slots = store._resolve_slots(1, second)
+        stats = store.stats()
+        assert stats["prefetch"]["failed"] == 2
+        assert stats["prefetch"]["useful"] == 0
+        assert stats["bytes_read"] == 2 * store.record_size
+        fallback_slots = [int(slots[0, 0, index]) for index in range(2)]
+        copied = [int(np.asarray(store._pools[suffixes[0]])[slot, 0]) for slot in fallback_slots]
         assert copied == [40, 50]

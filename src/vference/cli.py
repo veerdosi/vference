@@ -17,6 +17,7 @@ from .runtime.verify import (
     verify_runtime_corpus,
 )
 from .runtime.generate import generate_greedy
+from .runtime.integrity import verify_artifact_integrity
 from .system import mount_info, print_json
 
 
@@ -99,6 +100,10 @@ def _artifact_verify(args: argparse.Namespace) -> None:
     print_json(result)
     if not result["verified"]:
         raise SystemExit(1)
+
+
+def _artifact_integrity(args: argparse.Namespace) -> None:
+    print_json(verify_artifact_integrity(args.artifact, force=args.force))
 
 
 def _expert_math_verify(args: argparse.Namespace) -> None:
@@ -238,6 +243,11 @@ def build_parser() -> argparse.ArgumentParser:
     verify_parser.add_argument("source", type=Path)
     verify_parser.add_argument("artifact", type=Path)
     verify_parser.set_defaults(func=_artifact_verify)
+
+    integrity_parser = commands.add_parser("artifact-integrity")
+    integrity_parser.add_argument("artifact", type=Path)
+    integrity_parser.add_argument("--force", action="store_true")
+    integrity_parser.set_defaults(func=_artifact_integrity)
 
     math_parser = commands.add_parser("expert-math-verify")
     math_parser.add_argument("source", type=Path)

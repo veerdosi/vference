@@ -16,6 +16,8 @@ import numpy as np
 
 from vference.native import extension
 
+from .integrity import file_identity
+
 
 _NUMPY_DTYPES = {
     "U32": np.dtype("<u4"),
@@ -90,6 +92,8 @@ class SynchronousExpertStore:
             fcntl.fcntl(self._fd, F_NOCACHE, 1)
         self.nocache = nocache
         self.trace_routes = trace_routes
+        self._pack_identity = file_identity(self.artifact / "experts.pack")
+        self.artifact_integrity: dict[str, object] | None = None
         self._cache: OrderedDict[tuple[int, int], ExpertWeights] = OrderedDict()
         self.hits = 0
         self.misses = 0
@@ -148,6 +152,11 @@ class SynchronousExpertStore:
         if not 0 <= expert_id < self.expert_count:
             raise IndexError(f"expert {expert_id} out of range")
         return layer_ordinal * self.layer_stride + expert_id * self.record_size
+
+    def validate_source_unchanged(self) -> None:
+        current = file_identity(self.artifact / "experts.pack")
+        if current != self._pack_identity:
+            raise OSError("experts.pack changed after runtime integrity admission")
 
     @staticmethod
     def _array(data: memoryview, component: ComponentLayout) -> mx.array:
@@ -274,6 +283,7 @@ class SynchronousExpertStore:
             "hits": self.hits,
             "misses": self.misses,
             "bytes_read": self.bytes_read,
+            "artifact_integrity": self.artifact_integrity,
             "timing_seconds": {
                 "pread": self.read_ns / 1_000_000_000,
                 "materialize": self.materialize_ns / 1_000_000_000,
@@ -343,6 +353,8 @@ class StableSlotExpertStore(SynchronousExpertStore):
         self.capacity = capacity
         self.nocache = nocache
         self.trace_routes = trace_routes
+        self._pack_identity = file_identity(self.artifact / "experts.pack")
+        self.artifact_integrity: dict[str, object] | None = None
         if prefetch_policy not in {"none", "adaptive_cross"}:
             raise ValueError(f"unknown prefetch policy: {prefetch_policy}")
         if not 1 <= prefetch_budget <= 8:

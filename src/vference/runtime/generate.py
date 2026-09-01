@@ -331,6 +331,7 @@ def generate_greedy(
             chunk = prompt_tokens[start : start + prefill_chunk_size]
             logits = model(mx.array([chunk]), cache=cache)
             mx.eval(logits)
+            store.validate_source_unchanged()
             chunk_memory = {
                 "start_token": start,
                 "token_count": len(chunk),
@@ -370,6 +371,7 @@ def generate_greedy(
         eos_ids = set(tokenizer.eos_token_ids)
         for step in range(max_tokens):
             assert logits is not None
+            store.validate_source_unchanged()
             token_id = select_token(logits, sampler)
             output_tokens.append(token_id)
             if first_token_at is None:

@@ -14,6 +14,7 @@ from .expert_store import (
     StreamingSwitchGLU,
     SynchronousExpertStore,
 )
+from .integrity import verify_artifact_integrity
 
 
 def load_streaming_qwen(
@@ -30,6 +31,7 @@ def load_streaming_qwen(
 ) -> tuple[Model, object, SynchronousExpertStore]:
     """Load the resident text core and attach exact synchronous expert streaming."""
     artifact = artifact.resolve()
+    integrity = verify_artifact_integrity(artifact)
     config = json.loads((artifact / "config.json").read_text())
     model = Model(ModelArgs.from_dict(config))
     store_types = {
@@ -55,6 +57,7 @@ def load_streaming_qwen(
     elif prefetch_policy != "none":
         raise ValueError("the Python reference store does not support prefetch")
     store = store_type(artifact, **store_kwargs)
+    store.artifact_integrity = integrity
     for layer_id, layer in enumerate(model.language_model.layers):
         layer.mlp.switch_mlp = StreamingSwitchGLU(layer_id, store)
     gc.collect()
