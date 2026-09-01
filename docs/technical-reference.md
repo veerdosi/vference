@@ -839,6 +839,25 @@ outputs; it does not replace BF16-versus-quantized quality evaluation. The
 tracked corpus is `experiments/corpus/runtime-v1.json`, and results are in
 `experiments/runtime/runtime-correctness-v1-2026-09-01.json`.
 
+Seeded categorical generation is now part of the architecture-neutral runtime
+surface. Greedy remains the default; explicit temperature, top-p, top-k, and
+seed parameters use the pinned MLX-LM sampler after model logits are complete
+and therefore cannot affect routing or cache behavior. A fixed 64-token sample
+matched exactly across the Python expert reference, stable layer cache, forced
+100% decode misses, and confidence-gated adaptive prefetch.
+
+The tracked stochastic corpus extends this across explanation, code, Japanese,
+structured JSON, and reasoning prompts with five distinct seeds and sampler
+settings. For all 158 generated steps, the complete vocabulary-logit vector
+was bit-exact between the stable adaptive-prefetch path and the Python
+exact-expert reference; every sampled token also matched. Peak MLX memory was
+2,633,133,216 bytes and system-wide swap occupancy decreased by 3,801,088
+bytes. Exact per-step logits prove that the runtime leaves the categorical
+distribution unchanged, which is stronger than failing to detect drift in a
+finite frequency test. This is runtime correctness for the pinned 4-bit
+artifact, not BF16-versus-quantized quality evidence. See
+`experiments/runtime/runtime-stochastic-v1-2026-09-02.json`.
+
 For the frozen same-context baseline, the runtime used the identical safe
 7,936-token prefill and then cleared expert identities before every decoded
 layer, forcing all exact top-8 experts to be synchronously read. This baseline

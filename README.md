@@ -67,8 +67,7 @@ measured memory model before prefill. Stable slots also match the Python
 exact-expert reference with zero logit error on the first split-state and
 five-domain deterministic corpus. Against an exact forced-demand 8K baseline,
 it improves throughput 17.6% and reduces exposed expert time 15.7%. It is not
-yet a release claim; broader correctness, stochastic, and failure-injection
-cases remain.
+yet a release claim; broader long-context and failure-injection cases remain.
 
 `--decode-cache-capacity` can replace the stable expert pool at the synchronized
 prefill/decode boundary when a different phase budget is explicitly desired.
@@ -77,6 +76,14 @@ experiments reduced expert traffic, but 560 caused 482.5 MB of swap growth and
 480 improved mean throughput only 1.3% while one repetition had positive swap
 growth. Keep the 8 GB long-context default at 320 slots; the resize mechanism
 is retained for larger-memory machines and future pressure-aware policies.
+
+Generation also supports reproducible categorical sampling with
+`--temperature`, `--top-p`, `--top-k`, and `--seed`; temperature zero preserves
+the existing greedy default. A five-domain, five-seed corpus matched the Python
+exact-expert reference bit-for-bit at every generated-step logit vector and
+produced identical sampled tokens under adaptive prefetch. These checks prove
+runtime equivalence for the pinned 4-bit artifact, not 4-bit-versus-BF16 model
+quality.
 
 Stage 4 also includes an opt-in one-record adaptive cross-layer prefetcher. It
 stages bytes in CPU memory and publishes them only when the exact router later

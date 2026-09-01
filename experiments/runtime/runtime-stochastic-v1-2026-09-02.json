@@ -1,0 +1,145 @@
+{
+  "artifact": {
+    "expert_pack_bytes": 18119393280,
+    "expert_pack_sha256": "9b26ebdf13a2863d607e1c3ea6e2528ff0267b7f472f8fd37fd20d3adb497e18",
+    "model_revision": "1e20fd8d42056f870933bf98ca6211024744f7ec",
+    "repository": "mlx-community/Qwen3.5-35B-A3B-4bit"
+  },
+  "benchmark_commit": "cab9537ff50a800ab4d81a2e982e6eb993063045",
+  "cache_state": "The five stable cases shared an initially empty 320-record cache; the five Python-reference cases then shared a new initially empty 320-record cache. Reads were buffered. Each case used a fresh model state and reset its configured sampler seed.",
+  "dependencies": {
+    "mlx": "0.32.2",
+    "mlx_lm": "0.31.3",
+    "nanobind": "2.15.0"
+  },
+  "hardware": {
+    "chip": "Apple M2",
+    "internal_free_bytes_after": 54492561408,
+    "memory_bytes": 8589934592,
+    "model": "Mac14,2",
+    "power": "Battery power at the post-run snapshot; metadata only",
+    "storage": "Internal APFS /dev/disk3s1s1 container over Apple Fabric",
+    "thermal": "pmset reported no thermal, performance, or CPU power warning after the tracked run"
+  },
+  "operating_system": {
+    "build": "25G83",
+    "version": "macOS 26.6.2"
+  },
+  "recorded_at_local": "2026-09-02T00:21:00+08:00",
+  "implementation": {
+    "commits": {
+      "sampling": "65028be",
+      "stochastic_corpus": "9116ac4",
+      "per_step_logit_comparison": "5495cdf",
+      "corpus_memory_boundaries": "cab9537"
+    },
+    "default_sampler": "Greedy remains the default with temperature=0.0",
+    "supported_parameters": ["temperature", "top_p", "top_k", "seed"],
+    "runtime_boundary": "Sampling is architecture-neutral and consumes final model logits; it does not alter routing, cache decisions, or model math."
+  },
+  "single_seed_policy_invariance": {
+    "generated_tokens": 64,
+    "output_token_sha256": "812487a2b8eea39f51e3479e26e39abc00f907096cd333e6e08909a831d32a34",
+    "prompt": "Explain how an exact out-of-core mixture-of-experts runtime preserves model quality while reducing memory use.",
+    "sampler": {
+      "seed": 20260902,
+      "temperature": 0.8,
+      "top_k": 40,
+      "top_p": 0.9
+    },
+    "all_output_tokens_exact": true,
+    "runs": [
+      {
+        "decode_cache": "Python exact-expert reference, global LRU",
+        "decode_tokens_per_second": 2.0806663673188095,
+        "mlx_peak_bytes": 2061591692,
+        "swap_delta_bytes": 0
+      },
+      {
+        "decode_cache": "Stable slots, layer-partitioned",
+        "decode_tokens_per_second": 2.394846798778491,
+        "mlx_peak_bytes": 2061247628,
+        "physical_expert_bytes": 22521839616,
+        "swap_delta_bytes": -8388608
+      },
+      {
+        "decode_cache": "Stable slots, forced 100% demand misses",
+        "decode_tokens_per_second": 1.5608394837616884,
+        "mlx_peak_bytes": 2062247584,
+        "physical_expert_bytes": 35672555520,
+        "swap_delta_bytes": 0
+      },
+      {
+        "decode_cache": "Stable slots, layer-partitioned, confidence-gated adaptive prefetch budget two",
+        "decode_tokens_per_second": 2.3952273993702637,
+        "mlx_peak_bytes": 2062247584,
+        "physical_expert_bytes": 22905815040,
+        "swap_delta_bytes": 0
+      }
+    ]
+  },
+  "five_domain_corpus": {
+    "corpus": "experiments/corpus/runtime-stochastic-v1.json",
+    "case_count": 5,
+    "generated_step_count": 158,
+    "domains": ["explanation", "code", "Japanese", "structured JSON", "reasoning"],
+    "sampler_seeds": [17, 23, 31, 43, 59],
+    "temperature_range": [0.6, 0.9],
+    "top_p_range": [0.9, 0.95],
+    "top_k_range": [30, 50],
+    "stable_configuration": {
+      "cache_capacity": 320,
+      "cache_policy": "global",
+      "prefetch_budget": 2,
+      "prefetch_min_observations": 8,
+      "prefetch_policy": "adaptive_cross"
+    },
+    "reference_configuration": "Python exact-expert store with the same resident model, artifact, prompts, model state reset, sampler parameters, and seed",
+    "all_initial_logits_exact": true,
+    "max_initial_logits_abs_error": 0.0,
+    "all_generated_step_logits_bit_exact": true,
+    "all_sampled_tokens_exact": true,
+    "first_step_logits_difference": null,
+    "stable_store": {
+      "bytes_read": 83582779392,
+      "execute_seconds": 85.793731004,
+      "hits": 49043,
+      "misses": 47917,
+      "physical_bytes": 86213984256,
+      "pread_seconds": 57.624920268,
+      "prefetch_bytes": 2631204864,
+      "prefetch_failed": 0,
+      "prefetch_useful": 681,
+      "prefetch_wrong": 818,
+      "router_and_graph_wait_seconds": 27.353555643
+    },
+    "python_reference_store": {
+      "bytes_read": 93304258560,
+      "execute_seconds": 101.948366847,
+      "hits": 44230,
+      "materialize_seconds": 7.608036414,
+      "misses": 52730,
+      "pread_seconds": 63.854333127,
+      "router_and_graph_wait_seconds": 29.258063489
+    },
+    "mlx_active_bytes_at_result": 2511331654,
+    "mlx_peak_bytes": 2633133216,
+    "process_rss_bytes": {
+      "after_verification": 625115136,
+      "before_load": 94076928,
+      "high_water": 1371209728
+    },
+    "system_swap_bytes": {
+      "after": 1841496064,
+      "before": 1845297152,
+      "delta": -3801088,
+      "swap_in_delta": 136149614592,
+      "swap_out_delta": 25722880
+    }
+  },
+  "decision": {
+    "status": "Seeded stochastic runtime correctness gate passed for the initial five-domain corpus",
+    "reason": "Every generated-step full-vocabulary logit vector was bit-exact between the stable adaptive-prefetch path and the Python exact-expert reference. Identical logits plus the identical seeded sampler imply identical categorical distributions; every sampled token also matched. Forced misses and no-prefetch stable paths matched in the separate fixed-seed check.",
+    "quality_scope": "This proves that storage, cache, forced misses, and prefetch do not change this quantized artifact's stochastic inference. It does not compare the 4-bit artifact's language quality with BF16."
+  }
+}
