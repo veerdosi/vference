@@ -1,8 +1,10 @@
 from __future__ import annotations
 
-from pathlib import Path
-import os
+import hashlib
 import json
+import os
+import time
+from pathlib import Path
 
 import mlx.core as mx
 import mlx.nn as nn
@@ -87,9 +89,7 @@ def verify_real_layer_math(
     expanded = mx.expand_dims(x, (-2, -3))
     up = _gather_qmm(expanded, arrays, "up_proj", local_indices)
     gate = _gather_qmm(expanded, arrays, "gate_proj", local_indices)
-    expected = _gather_qmm(
-        nn.silu(gate) * up, arrays, "down_proj", local_indices
-    ).squeeze(-2)
+    expected = _gather_qmm(nn.silu(gate) * up, arrays, "down_proj", local_indices).squeeze(-2)
 
     store_types = {
         "python": SynchronousExpertStore,
@@ -166,17 +166,13 @@ def verify_multi_turn_state(
         stable_logits, stable_output, stable_state_bytes = run_split()
         stable_stats = stable_store.stats()
 
-        reference_store = SynchronousExpertStore(
-            artifact, capacity=cache_capacity
-        )
+        reference_store = SynchronousExpertStore(artifact, capacity=cache_capacity)
         for layer_id, layer in enumerate(model.language_model.layers):
             layer.mlp.switch_mlp = StreamingSwitchGLU(layer_id, reference_store)
         reference_logits, reference_output, reference_state_bytes = run_split()
 
         initial_delta = np.abs(stable_logits - reference_logits)
-        initial_tokens_equal = int(stable_logits.argmax()) == int(
-            reference_logits.argmax()
-        )
+        initial_tokens_equal = int(stable_logits.argmax()) == int(reference_logits.argmax())
 
         return {
             "artifact": str(artifact.resolve()),
@@ -205,6 +201,185 @@ def _cache_bytes(cache: list[object]) -> int:
     return sum(int(getattr(item, "nbytes", 0)) for item in cache)
 
 
+def verify_prefill_chunk_invariance(
+    artifact: Path,
+    *,
+    prompt: str,
+    prompt_token_count: int,
+    chunk_sizes: tuple[int, ...],
+    continuation_tokens: int = 16,
+    cache_capacity: int = 320,
+    nocache: bool = False,
+) -> dict[str, object]:
+    """Compare logits and greedy tokens across prefill chunk boundaries."""
+    if prompt_token_count < 1:
+        raise ValueError("prompt token count must be positive")
+    if continuation_tokens < 1:
+        raise ValueError("continuation token count must be positive")
+    if len(chunk_sizes) < 2 or any(size < 1 for size in chunk_sizes):
+        raise ValueError("provide at least two positive prefill chunk sizes")
+
+    model, tokenizer, store = load_streaming_qwen(
+        artifact,
+        cache_capacity=cache_capacity,
+        nocache=nocache,
+        trace_routes=True,
+        store_kind="stable",
+        cache_policy="global",
+        prefetch_policy="none",
+    )
+    try:
+        base_tokens = tokenizer.encode(prompt, add_special_tokens=False)
+        if not base_tokens:
+            raise ValueError("prompt encoded to zero tokens")
+        repetitions = (prompt_token_count + len(base_tokens) - 1) // len(base_tokens)
+        prompt_tokens = (base_tokens * repetitions)[:prompt_token_count]
+
+        logits_by_chunk: list[np.ndarray] = []
+        output_by_chunk: list[list[int]] = []
+        routes_by_chunk: list[dict[int, list[list[int]]]] = []
+        runs: list[dict[str, object]] = []
+        for chunk_size in chunk_sizes:
+            trace_start = len(store.trace())
+            cache = model.make_cache()
+            logits = None
+            started = time.perf_counter()
+            for start in range(0, len(prompt_tokens), chunk_size):
+                chunk = prompt_tokens[start : start + chunk_size]
+                logits = model(mx.array([chunk]), cache=cache)
+                mx.eval(logits)
+            prefill_seconds = time.perf_counter() - started
+            assert logits is not None
+            initial_logits = np.asarray(logits[0, -1].astype(mx.float32)).copy()
+            output_tokens: list[int] = []
+            for step in range(continuation_tokens):
+                token_id = int(mx.argmax(logits[0, -1]).item())
+                output_tokens.append(token_id)
+                if step + 1 < continuation_tokens:
+                    logits = model(mx.array([[token_id]]), cache=cache)
+                    mx.eval(logits)
+            token_encoding = json.dumps(output_tokens, separators=(",", ":")).encode()
+            normalized_routes: dict[int, list[list[int]]] = {}
+            for record in store.trace()[trace_start:]:
+                layer_id = int(record["layer_id"])
+                normalized_routes.setdefault(layer_id, []).extend(record["expert_ids"])
+            route_encoding = json.dumps(
+                normalized_routes, sort_keys=True, separators=(",", ":")
+            ).encode()
+            normalized_route_sets = {
+                layer_id: [sorted(experts) for experts in rows]
+                for layer_id, rows in normalized_routes.items()
+            }
+            route_set_encoding = json.dumps(
+                normalized_route_sets, sort_keys=True, separators=(",", ":")
+            ).encode()
+            logits_by_chunk.append(initial_logits)
+            output_by_chunk.append(output_tokens)
+            routes_by_chunk.append(normalized_routes)
+            runs.append(
+                {
+                    "chunk_size": chunk_size,
+                    "prefill_seconds": prefill_seconds,
+                    "initial_argmax": int(initial_logits.argmax()),
+                    "output_tokens": output_tokens,
+                    "output_token_sha256": hashlib.sha256(token_encoding).hexdigest(),
+                    "route_sha256": hashlib.sha256(route_encoding).hexdigest(),
+                    "route_set_sha256": hashlib.sha256(route_set_encoding).hexdigest(),
+                }
+            )
+            del cache, logits
+            mx.clear_cache()
+
+        reference_logits = logits_by_chunk[0]
+        reference_output = output_by_chunk[0]
+        reference_routes = routes_by_chunk[0]
+        comparisons = []
+        for chunk_size, logits, output_tokens, routes in zip(
+            chunk_sizes[1:],
+            logits_by_chunk[1:],
+            output_by_chunk[1:],
+            routes_by_chunk[1:],
+        ):
+            delta = np.abs(reference_logits - logits)
+            first_difference = next(
+                (
+                    index
+                    for index, (left, right) in enumerate(zip(reference_output, output_tokens))
+                    if left != right
+                ),
+                None,
+            )
+            first_route_difference = None
+            first_route_set_difference = None
+            for layer_id in sorted(set(reference_routes) | set(routes)):
+                reference_layer = reference_routes.get(layer_id, [])
+                candidate_layer = routes.get(layer_id, [])
+                for token_index, (left, right) in enumerate(zip(reference_layer, candidate_layer)):
+                    if left != right:
+                        if first_route_difference is None:
+                            first_route_difference = {
+                                "layer_id": layer_id,
+                                "token_index": token_index,
+                                "reference_experts": left,
+                                "candidate_experts": right,
+                            }
+                        if sorted(left) != sorted(right):
+                            first_route_set_difference = {
+                                "layer_id": layer_id,
+                                "token_index": token_index,
+                                "reference_experts": left,
+                                "candidate_experts": right,
+                            }
+                            break
+                if first_route_set_difference is not None:
+                    break
+                if len(reference_layer) != len(candidate_layer):
+                    length_difference = {
+                        "layer_id": layer_id,
+                        "reference_token_count": len(reference_layer),
+                        "candidate_token_count": len(candidate_layer),
+                    }
+                    if first_route_difference is None:
+                        first_route_difference = length_difference
+                    first_route_set_difference = length_difference
+                    break
+            comparisons.append(
+                {
+                    "reference_chunk_size": chunk_sizes[0],
+                    "candidate_chunk_size": chunk_size,
+                    "initial_logits_exact": bool(np.array_equal(reference_logits, logits)),
+                    "initial_logits_max_abs_error": float(delta.max()),
+                    "initial_logits_mean_abs_error": float(delta.mean()),
+                    "initial_argmax_equal": int(reference_logits.argmax()) == int(logits.argmax()),
+                    "output_tokens_exact": reference_output == output_tokens,
+                    "first_output_difference": first_difference,
+                    "routes_exact": reference_routes == routes,
+                    "first_route_difference": first_route_difference,
+                    "route_expert_sets_exact": first_route_set_difference is None,
+                    "first_route_set_difference": first_route_set_difference,
+                }
+            )
+
+        return {
+            "artifact": str(artifact.resolve()),
+            "prompt_tokens": len(prompt_tokens),
+            "continuation_tokens": continuation_tokens,
+            "reference_chunk_size": chunk_sizes[0],
+            "all_initial_logits_exact": all(item["initial_logits_exact"] for item in comparisons),
+            "all_initial_argmax_equal": all(item["initial_argmax_equal"] for item in comparisons),
+            "all_output_tokens_exact": all(item["output_tokens_exact"] for item in comparisons),
+            "all_routes_exact": all(item["routes_exact"] for item in comparisons),
+            "all_route_expert_sets_exact": all(
+                item["route_expert_sets_exact"] for item in comparisons
+            ),
+            "runs": runs,
+            "comparisons": comparisons,
+            "store": store.stats(),
+        }
+    finally:
+        store.close()
+
+
 def verify_runtime_corpus(
     artifact: Path,
     corpus_path: Path,
@@ -231,6 +406,7 @@ def verify_runtime_corpus(
     )
     reference_store = None
     try:
+
         def run_case(case: dict[str, object]) -> tuple[np.ndarray, list[int], str]:
             prompt_tokens = tokenizer.apply_chat_template(
                 [{"role": "user", "content": str(case["prompt"])}],
@@ -256,9 +432,7 @@ def verify_runtime_corpus(
         stable_results = [run_case(case) for case in cases]
         stable_stats = stable_store.stats()
 
-        reference_store = SynchronousExpertStore(
-            artifact, capacity=cache_capacity
-        )
+        reference_store = SynchronousExpertStore(artifact, capacity=cache_capacity)
         for layer_id, layer in enumerate(model.language_model.layers):
             layer.mlp.switch_mlp = StreamingSwitchGLU(layer_id, reference_store)
         reference_results = [run_case(case) for case in cases]

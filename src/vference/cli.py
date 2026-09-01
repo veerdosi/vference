@@ -12,6 +12,7 @@ from .bench.cache import replay_prefetch, replay_trace
 from .experiments import append_record, make_record
 from .runtime.verify import (
     verify_multi_turn_state,
+    verify_prefill_chunk_invariance,
     verify_real_layer_math,
     verify_runtime_corpus,
 )
@@ -170,6 +171,25 @@ def _corpus_verify(args: argparse.Namespace) -> None:
         raise SystemExit(1)
 
 
+def _prefill_chunk_verify(args: argparse.Namespace) -> None:
+    result = verify_prefill_chunk_invariance(
+        args.artifact,
+        prompt=args.prompt,
+        prompt_token_count=args.prompt_tokens,
+        chunk_sizes=tuple(args.chunk_sizes),
+        continuation_tokens=args.max_tokens,
+        cache_capacity=args.cache_capacity,
+        nocache=args.nocache,
+    )
+    print_json(result)
+    if (
+        not result["all_initial_logits_exact"]
+        or not result["all_output_tokens_exact"]
+        or not result["all_routes_exact"]
+    ):
+        raise SystemExit(1)
+
+
 def _route_replay(args: argparse.Namespace) -> None:
     print_json(
         replay_trace(
@@ -234,9 +254,7 @@ def build_parser() -> argparse.ArgumentParser:
     generate_parser.add_argument(
         "--cache-policy", choices=("global", "layer", "demand"), default="global"
     )
-    generate_parser.add_argument(
-        "--decode-cache-policy", choices=("global", "layer", "demand")
-    )
+    generate_parser.add_argument("--decode-cache-policy", choices=("global", "layer", "demand"))
     generate_parser.add_argument(
         "--clear-cache-between-prefill-chunks",
         action=argparse.BooleanOptionalAction,
@@ -272,6 +290,16 @@ def build_parser() -> argparse.ArgumentParser:
     )
     corpus_parser.add_argument("--prefetch-budget", type=int, default=1)
     corpus_parser.set_defaults(func=_corpus_verify)
+
+    chunk_parser = commands.add_parser("prefill-chunk-verify")
+    chunk_parser.add_argument("artifact", type=Path)
+    chunk_parser.add_argument("--prompt", required=True)
+    chunk_parser.add_argument("--prompt-tokens", type=int, default=512)
+    chunk_parser.add_argument("--chunk-sizes", nargs="+", type=int, required=True)
+    chunk_parser.add_argument("--max-tokens", type=int, default=16)
+    chunk_parser.add_argument("--cache-capacity", type=int, default=320)
+    chunk_parser.add_argument("--nocache", action="store_true")
+    chunk_parser.set_defaults(func=_prefill_chunk_verify)
 
     replay_parser = commands.add_parser("route-replay")
     replay_parser.add_argument("trace", type=Path)
