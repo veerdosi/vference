@@ -19,9 +19,7 @@ def test_replay_global_and_partitioned_lru(tmp_path: Path) -> None:
     path = tmp_path / "trace.json"
     path.write_text(json.dumps(trace))
     result = replay_trace(path, capacities=(2, 4), record_size=100)
-    by_key = {
-        (item["policy"], item["capacity_records"]): item for item in result["results"]
-    }
+    by_key = {(item["policy"], item["capacity_records"]): item for item in result["results"]}
     assert by_key[("global_lru", 2)]["hits"] == 0
     assert by_key[("partitioned_lru", 2)]["hits"] == 0
     assert by_key[("global_lru", 4)]["hits"] == 2
@@ -45,9 +43,7 @@ def test_prefetch_replay_separates_exposed_and_physical_reads(tmp_path: Path) ->
     }
     path = tmp_path / "trace.json"
     path.write_text(json.dumps(trace))
-    result = replay_prefetch(
-        path, capacity_per_layer=1, budgets=(1,), record_size=100
-    )
+    result = replay_prefetch(path, capacity_per_layer=1, budgets=(1,), record_size=100)
     assert result["baseline"]["exposed_demand_misses"] == 2
     by_predictor = {item["predictor"]: item for item in result["results"]}
     transition = by_predictor["cross_layer_transition"]
@@ -57,3 +53,17 @@ def test_prefetch_replay_separates_exposed_and_physical_reads(tmp_path: Path) ->
     static = by_predictor["static_popularity"]
     assert static["exposed_demand_misses"] == 0
     assert static["total_physical_reads"] == 2
+
+    supported = replay_prefetch(
+        path,
+        capacity_per_layer=1,
+        budgets=(1,),
+        record_size=100,
+        adaptive_min_observations=(3,),
+    )
+    adaptive = next(
+        item for item in supported["results"] if item["predictor"] == "cross_layer_adaptive"
+    )
+    assert adaptive["min_prediction_observations"] == 3
+    assert adaptive["prefetch_reads"] == 0
+    assert adaptive["exposed_demand_misses"] == 2

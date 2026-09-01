@@ -107,7 +107,9 @@ def test_streamed_experts_match_the_same_quantized_arrays(tmp_path: Path) -> Non
             np.asarray(expected_array.view(mx.uint16)),
         )
         stats = store.stats()
-        assert {key: stats[key] for key in ("capacity", "resident", "hits", "misses", "bytes_read")} == {
+        assert {
+            key: stats[key] for key in ("capacity", "resident", "hits", "misses", "bytes_read")
+        } == {
             "capacity": 1,
             "resident": 1,
             "hits": 0,
@@ -198,13 +200,9 @@ def test_stable_slots_match_math_and_keep_addresses(tmp_path: Path) -> None:
         split_batch = stable.execute(0, batch_x, batch_indices)
         mx.eval(split_batch)
         stable.set_cache_policy("layer")
-        after_transition = stable.execute(
-            0, x, mx.array([[[0, 1]]], dtype=mx.int32)
-        )
+        after_transition = stable.execute(0, x, mx.array([[[0, 1]]], dtype=mx.int32))
         mx.eval(after_transition)
-        assert stable.stats()["policy_transitions"] == [
-            {"from": "global", "to": "layer"}
-        ]
+        assert stable.stats()["policy_transitions"] == [{"from": "global", "to": "layer"}]
         stable.set_cache_policy("demand")
         misses_before = stable.stats()["misses"]
         demand_first = stable.execute(0, x, mx.array([[[0, 1]]], dtype=mx.int32))
@@ -301,10 +299,15 @@ def test_adaptive_prefetch_stages_only_then_publishes_exact_demand(
         cache_policy="layer",
         prefetch_policy="adaptive_cross",
         prefetch_budget=2,
+        prefetch_min_observations=2,
     ) as store:
         first = np.asarray([[[0, 1]]], dtype=np.int64)
         second = np.asarray([[[1, 2]]], dtype=np.int64)
         store._observe_transition(0, first)
+        store._observe_transition(1, second)
+        store._observe_transition(0, first)
+        store._predict_next(0, first)
+        assert store.stats()["prefetch"]["submitted"] == 0
         store._observe_transition(1, second)
         store._observe_transition(0, first)
         store._predict_next(0, first)
@@ -315,8 +318,5 @@ def test_adaptive_prefetch_stages_only_then_publishes_exact_demand(
         assert stats["useful"] == 2
         assert stats["failed"] == 0
         predicted_slots = [int(slots[0, 0, index]) for index in range(2)]
-        copied = [
-            int(np.asarray(store._pools[suffixes[0]])[slot, 0])
-            for slot in predicted_slots
-        ]
+        copied = [int(np.asarray(store._pools[suffixes[0]])[slot, 0]) for slot in predicted_slots]
         assert copied == [40, 50]

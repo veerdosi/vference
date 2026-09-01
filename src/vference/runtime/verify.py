@@ -387,6 +387,7 @@ def verify_runtime_corpus(
     cache_capacity: int = 320,
     prefetch_policy: str = "none",
     prefetch_budget: int = 1,
+    prefetch_min_observations: int = 8,
 ) -> dict[str, object]:
     """Compare deterministic chat cases between stable and Python stores."""
     corpus = json.loads(corpus_path.read_text())
@@ -403,6 +404,7 @@ def verify_runtime_corpus(
         cache_policy="global",
         prefetch_policy=prefetch_policy,
         prefetch_budget=prefetch_budget,
+        prefetch_min_observations=prefetch_min_observations,
     )
     reference_store = None
     try:
@@ -457,6 +459,7 @@ def verify_runtime_corpus(
             "case_count": len(results),
             "prefetch_policy": prefetch_policy,
             "prefetch_budget": prefetch_budget,
+            "prefetch_min_observations": prefetch_min_observations,
             "all_tokens_exact": all(result["tokens_exact"] for result in results),
             "max_initial_logits_abs_error": max(
                 result["initial_logits_max_abs_error"] for result in results

@@ -141,6 +141,7 @@ def _stream_generate(args: argparse.Namespace) -> None:
             ),
             prefetch_policy=args.prefetch_policy,
             prefetch_budget=args.prefetch_budget,
+            prefetch_min_observations=args.prefetch_min_observations,
             allow_unqualified_prefill_chunk_size=(args.allow_unqualified_prefill_chunk_size),
         )
     )
@@ -166,6 +167,7 @@ def _corpus_verify(args: argparse.Namespace) -> None:
         cache_capacity=args.cache_capacity,
         prefetch_policy=args.prefetch_policy,
         prefetch_budget=args.prefetch_budget,
+        prefetch_min_observations=args.prefetch_min_observations,
     )
     print_json(result)
     if not result["all_tokens_exact"]:
@@ -208,6 +210,7 @@ def _prefetch_replay(args: argparse.Namespace) -> None:
             capacity_per_layer=args.capacity_per_layer,
             budgets=tuple(args.budgets),
             record_size=args.record_size,
+            adaptive_min_observations=tuple(args.adaptive_min_observations),
         )
     )
 
@@ -275,6 +278,7 @@ def build_parser() -> argparse.ArgumentParser:
         default="none",
     )
     generate_parser.add_argument("--prefetch-budget", type=int, default=1)
+    generate_parser.add_argument("--prefetch-min-observations", type=int, default=8)
     generate_parser.set_defaults(func=_stream_generate)
 
     multi_turn_parser = commands.add_parser("multi-turn-verify")
@@ -295,6 +299,7 @@ def build_parser() -> argparse.ArgumentParser:
         default="none",
     )
     corpus_parser.add_argument("--prefetch-budget", type=int, default=1)
+    corpus_parser.add_argument("--prefetch-min-observations", type=int, default=8)
     corpus_parser.set_defaults(func=_corpus_verify)
 
     chunk_parser = commands.add_parser("prefill-chunk-verify")
@@ -319,6 +324,7 @@ def build_parser() -> argparse.ArgumentParser:
     prefetch_parser.add_argument("trace", type=Path)
     prefetch_parser.add_argument("--capacity-per-layer", type=int, default=8)
     prefetch_parser.add_argument("--budgets", nargs="+", type=int, default=[1, 2, 4, 8])
+    prefetch_parser.add_argument("--adaptive-min-observations", nargs="+", type=int, default=[1])
     prefetch_parser.add_argument("--record-size", type=int, default=1_769_472)
     prefetch_parser.set_defaults(func=_prefetch_replay)
 

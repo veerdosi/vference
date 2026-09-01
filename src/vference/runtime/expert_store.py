@@ -173,8 +173,7 @@ class SynchronousExpertStore:
         arrays = {
             component.suffix: self._array(
                 memoryview(record)[
-                    component.record_offset : component.record_offset
-                    + component.bytes_per_expert
+                    component.record_offset : component.record_offset + component.bytes_per_expert
                 ],
                 component,
             )
@@ -252,9 +251,7 @@ class SynchronousExpertStore:
                 gate = self._qmm(
                     token_x, weights.gate_weight, weights.gate_scales, weights.gate_biases
                 )
-                up = self._qmm(
-                    token_x, weights.up_weight, weights.up_scales, weights.up_biases
-                )
+                up = self._qmm(token_x, weights.up_weight, weights.up_scales, weights.up_biases)
                 hidden = nn.silu(gate) * up
                 down = self._qmm(
                     hidden,
@@ -315,6 +312,7 @@ class StableSlotExpertStore(SynchronousExpertStore):
         cache_policy: str = "global",
         prefetch_policy: str = "none",
         prefetch_budget: int = 1,
+        prefetch_min_observations: int = 8,
     ) -> None:
         if capacity < 1:
             raise ValueError("expert cache capacity must be positive")
@@ -348,8 +346,11 @@ class StableSlotExpertStore(SynchronousExpertStore):
             raise ValueError(f"unknown prefetch policy: {prefetch_policy}")
         if not 1 <= prefetch_budget <= 8:
             raise ValueError("prefetch budget must be between one and eight records")
+        if prefetch_min_observations < 1:
+            raise ValueError("prefetch minimum observations must be positive")
         self.prefetch_policy = prefetch_policy
         self.prefetch_budget = prefetch_budget
+        self.prefetch_min_observations = prefetch_min_observations
         if cache_policy not in {"global", "layer", "demand"}:
             raise ValueError(f"unknown stable cache policy: {cache_policy}")
         if cache_policy == "layer" and capacity < self.layer_count:
@@ -358,9 +359,7 @@ class StableSlotExpertStore(SynchronousExpertStore):
 
         native = extension()
         self._native = native
-        self._reader = native.PackReader(
-            str(self.artifact / "experts.pack"), nocache
-        )
+        self._reader = native.PackReader(str(self.artifact / "experts.pack"), nocache)
         dtype_names = {"U32": "uint32", "BF16": "bfloat16"}
         try:
             self._pools = {
@@ -371,12 +370,8 @@ class StableSlotExpertStore(SynchronousExpertStore):
             }
         except KeyError as error:
             raise ValueError(f"unsupported packed dtype: {error.args[0]}") from error
-        self._ordered_pools = [
-            self._pools[component.suffix] for component in self.components
-        ]
-        self._segment_bytes = [
-            component.bytes_per_expert for component in self.components
-        ]
+        self._ordered_pools = [self._pools[component.suffix] for component in self.components]
+        self._segment_bytes = [component.bytes_per_expert for component in self.components]
         self._free_slots = list(range(capacity - 1, -1, -1))
         self._free_slots_by_layer: dict[int, list[int]] = {}
         self._layer_capacities: dict[int, int] = {}
@@ -386,9 +381,7 @@ class StableSlotExpertStore(SynchronousExpertStore):
             for ordinal, layer_id in enumerate(self.layer_ids):
                 count = base + (ordinal < extra)
                 self._layer_capacities[layer_id] = count
-                self._free_slots_by_layer[layer_id] = list(
-                    range(start + count - 1, start - 1, -1)
-                )
+                self._free_slots_by_layer[layer_id] = list(range(start + count - 1, start - 1, -1))
                 start += count
         self._cache: OrderedDict[tuple[int, int], int] = OrderedDict()
         self._slot_keys: list[tuple[int, int] | None] = [None] * capacity
@@ -424,9 +417,7 @@ class StableSlotExpertStore(SynchronousExpertStore):
         self.prefetch_wait_ns = 0
         self.prefetch_copy_ns = 0
         if prefetch_policy != "none":
-            self._prefetch_fd = os.open(
-                self.artifact / "experts.pack", os.O_RDONLY
-            )
+            self._prefetch_fd = os.open(self.artifact / "experts.pack", os.O_RDONLY)
             if nocache:
                 fcntl.fcntl(self._prefetch_fd, F_NOCACHE, 1)
             self._prefetch_executor = ThreadPoolExecutor(
@@ -466,9 +457,7 @@ class StableSlotExpertStore(SynchronousExpertStore):
             for ordinal, layer_id in enumerate(self.layer_ids):
                 count = base + (ordinal < extra)
                 self._layer_capacities[layer_id] = count
-                self._free_slots_by_layer[layer_id] = list(
-                    range(start + count - 1, start - 1, -1)
-                )
+                self._free_slots_by_layer[layer_id] = list(range(start + count - 1, start - 1, -1))
                 start += count
         self.cache_policy = cache_policy
         self.policy_transitions.append({"from": previous, "to": cache_policy})
@@ -476,24 +465,19 @@ class StableSlotExpertStore(SynchronousExpertStore):
     def _observe_transition(self, layer_id: int, host_indices: np.ndarray) -> None:
         if self.prefetch_policy == "none":
             return
-        routes = host_indices.reshape(-1, host_indices.shape[-1]).astype(
-            np.intp, copy=False
-        )
+        routes = host_indices.reshape(-1, host_indices.shape[-1]).astype(np.intp, copy=False)
         previous = self._previous_layer_route
         if layer_id == self.layer_ids[0]:
             previous = None
         if (
             previous is not None
-            and self._layer_ordinals[previous[0]] + 1
-            == self._layer_ordinals[layer_id]
+            and self._layer_ordinals[previous[0]] + 1 == self._layer_ordinals[layer_id]
         ):
             left = previous[1]
             if len(left) == len(routes):
                 table = self._transition_tables.setdefault(
                     (previous[0], layer_id),
-                    np.zeros(
-                        (self.expert_count, self.expert_count), dtype=np.uint32
-                    ),
+                    np.zeros((self.expert_count, self.expert_count), dtype=np.uint32),
                 )
                 width = routes.shape[-1]
                 sources = np.repeat(left[:, :, None], width, axis=2).reshape(-1)
@@ -516,9 +500,7 @@ class StableSlotExpertStore(SynchronousExpertStore):
         self.prefetch_bytes_read += len(record)
         return record
 
-    def _retire_prefetch(
-        self, layer_id: int, requested: set[tuple[int, int]]
-    ) -> None:
+    def _retire_prefetch(self, layer_id: int, requested: set[tuple[int, int]]) -> None:
         for key, future in list(self._pending_prefetch.items()):
             if key[0] != layer_id or (key in requested and key not in self._cache):
                 continue
@@ -592,7 +574,7 @@ class StableSlotExpertStore(SynchronousExpertStore):
         selected = tuple(
             expert_id
             for expert_id in ranked[: self.prefetch_budget]
-            if scores[expert_id] > 0
+            if scores[expert_id] >= self.prefetch_min_observations * routes.shape[-1]
         )
         if not selected:
             return
@@ -607,9 +589,7 @@ class StableSlotExpertStore(SynchronousExpertStore):
             raise IndexError(f"expert {expert_id} out of range")
         return layer_ordinal * self.layer_stride + expert_id * self.record_size
 
-    def _allocate_slot(
-        self, key: tuple[int, int], protected: set[tuple[int, int]]
-    ) -> int:
+    def _allocate_slot(self, key: tuple[int, int], protected: set[tuple[int, int]]) -> int:
         if self.cache_policy == "layer":
             free_slots = self._free_slots_by_layer[key[0]]
             if free_slots:
@@ -631,8 +611,7 @@ class StableSlotExpertStore(SynchronousExpertStore):
                 self._slot_keys[slot] = None
                 return slot
         raise RuntimeError(
-            "stable expert capacity is smaller than the simultaneously requested "
-            "working set"
+            "stable expert capacity is smaller than the simultaneously requested working set"
         )
 
     def _load_slot(
@@ -662,8 +641,7 @@ class StableSlotExpertStore(SynchronousExpertStore):
         read_ns = time.perf_counter_ns() - started
         if count != self.record_size:
             raise OSError(
-                f"short expert read for ({layer_id}, {expert_id}): "
-                f"{count} != {self.record_size}"
+                f"short expert read for ({layer_id}, {expert_id}): {count} != {self.record_size}"
             )
         layer_ordinal = self._layer_ordinals[layer_id]
         if record is None:
@@ -677,9 +655,7 @@ class StableSlotExpertStore(SynchronousExpertStore):
         return slot
 
     def _resolve_slots(self, layer_id: int, host_indices: np.ndarray) -> np.ndarray:
-        requested = [
-            (layer_id, int(expert_id)) for expert_id in host_indices.reshape(-1)
-        ]
+        requested = [(layer_id, int(expert_id)) for expert_id in host_indices.reshape(-1)]
         protected = set(requested)
         self._retire_prefetch(layer_id, protected)
         available = self.capacity
@@ -689,8 +665,7 @@ class StableSlotExpertStore(SynchronousExpertStore):
             )
         if len(protected) > available:
             raise RuntimeError(
-                "stable expert capacity is smaller than the simultaneously requested "
-                "working set"
+                "stable expert capacity is smaller than the simultaneously requested working set"
             )
         slots: dict[tuple[int, int], int] = {}
         layer_ordinal = self._layer_ordinals[layer_id]
@@ -785,9 +760,7 @@ class StableSlotExpertStore(SynchronousExpertStore):
                 mx.eval(group_output)
                 grouped_outputs.append(group_output.reshape(-1, x.shape[-1]))
                 start = end
-            output = mx.concatenate(grouped_outputs, axis=0).reshape(
-                *indices.shape, x.shape[-1]
-            )
+            output = mx.concatenate(grouped_outputs, axis=0).reshape(*indices.shape, x.shape[-1])
         self.execute_ns += time.perf_counter_ns() - execute_started
         self._predict_next(layer_id, host_indices)
         return output
@@ -798,6 +771,7 @@ class StableSlotExpertStore(SynchronousExpertStore):
         values["cache_policy"] = self.cache_policy
         values["prefetch_policy"] = self.prefetch_policy
         values["prefetch_budget"] = self.prefetch_budget
+        values["prefetch_min_observations"] = self.prefetch_min_observations
         values["policy_transitions"] = list(self.policy_transitions)
         values["prefetch"] = {
             "submitted": self.prefetch_submitted,
@@ -818,10 +792,7 @@ class StableSlotExpertStore(SynchronousExpertStore):
 
     def pool_pointers(self) -> dict[str, int]:
         """Expose addresses for invariance tests and diagnostics."""
-        return {
-            suffix: self._native.data_pointer(pool)
-            for suffix, pool in self._pools.items()
-        }
+        return {suffix: self._native.data_pointer(pool) for suffix, pool in self._pools.items()}
 
 
 class StreamingSwitchGLU(nn.Module):

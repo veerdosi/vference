@@ -83,6 +83,7 @@ def generate_greedy(
     max_mlx_memory_bytes: int | None = None,
     prefetch_policy: str = "none",
     prefetch_budget: int = 1,
+    prefetch_min_observations: int = 8,
     allow_unqualified_prefill_chunk_size: bool = False,
 ) -> dict[str, object]:
     request_started = time.perf_counter()
@@ -115,6 +116,7 @@ def generate_greedy(
         cache_policy=cache_policy,
         prefetch_policy=prefetch_policy,
         prefetch_budget=prefetch_budget,
+        prefetch_min_observations=prefetch_min_observations,
     )
     load_seconds = time.perf_counter() - load_started
     model_ready_at = time.perf_counter()
@@ -246,6 +248,7 @@ def generate_greedy(
             "decode_cache_policy": effective_decode_cache_policy,
             "prefetch_policy": prefetch_policy,
             "prefetch_budget": prefetch_budget,
+            "prefetch_min_observations": prefetch_min_observations,
             "prompt_tokens": len(prompt_tokens),
             "prefill_chunk_size": prefill_chunk_size,
             "clear_cache_between_prefill_chunks": clear_cache_between_prefill_chunks,

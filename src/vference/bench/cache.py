@@ -32,10 +32,7 @@ def _partitioned_lru(
     requests: list[tuple[int, int]], capacity: int, layer_ids: list[int]
 ) -> tuple[int, int]:
     base, remainder = divmod(capacity, len(layer_ids))
-    limits = {
-        layer_id: base + (ordinal < remainder)
-        for ordinal, layer_id in enumerate(layer_ids)
-    }
+    limits = {layer_id: base + (ordinal < remainder) for ordinal, layer_id in enumerate(layer_ids)}
     caches = {layer_id: OrderedDict() for layer_id in layer_ids}
     hits = 0
     for layer_id, expert_id in requests:
@@ -74,9 +71,7 @@ def replay_trace(trace_path: Path, capacities: tuple[int, ...], record_size: int
     seen_by_layer: dict[int, set[int]] = {layer_id: set() for layer_id in layer_ids}
     for layer_id, expert_id in requests:
         seen_by_layer[layer_id].add(expert_id)
-    per_layer_unique.update(
-        {layer_id: len(experts) for layer_id, experts in seen_by_layer.items()}
-    )
+    per_layer_unique.update({layer_id: len(experts) for layer_id, experts in seen_by_layer.items()})
 
     results = []
     for capacity in capacities:
@@ -86,18 +81,14 @@ def replay_trace(trace_path: Path, capacities: tuple[int, ...], record_size: int
         results.append(_result("global_lru", capacity, hits, misses, record_size))
         if capacity >= len(layer_ids):
             hits, misses = _partitioned_lru(requests, capacity, layer_ids)
-            results.append(
-                _result("partitioned_lru", capacity, hits, misses, record_size)
-            )
+            results.append(_result("partitioned_lru", capacity, hits, misses, record_size))
 
     contiguous_pairs = 0
     possible_pairs = 0
     for record in trace["records"]:
         for expert_ids in record["expert_ids"]:
             ordered = sorted(int(value) for value in expert_ids)
-            contiguous_pairs += sum(
-                right == left + 1 for left, right in zip(ordered, ordered[1:])
-            )
+            contiguous_pairs += sum(right == left + 1 for left, right in zip(ordered, ordered[1:]))
             possible_pairs += max(0, len(ordered) - 1)
 
     return {
@@ -190,6 +181,7 @@ def _simulate_prefetch(
     popularity: dict[int, Counter],
     transitions: dict[tuple[int, int], dict[int, Counter]],
     initial_previous_by_layer: dict[int, tuple[int, ...]],
+    min_prediction_observations: int = 1,
 ) -> dict:
     caches = {layer_id: OrderedDict() for layer_id in layer_ids}
     speculative: set[tuple[int, int]] = set()
@@ -231,7 +223,11 @@ def _simulate_prefetch(
         table = adaptive_transitions.get((left_layer, right_layer), {})
         for source in selected:
             scores.update(table.get(source, {}))
-        return _top(scores, budget)
+        return tuple(
+            expert_id
+            for expert_id in _top(scores, budget)
+            if scores[expert_id] >= min_prediction_observations * max(1, len(selected))
+        )
 
     for call in decode:
         for ordinal, record in enumerate(call):
@@ -257,9 +253,7 @@ def _simulate_prefetch(
                     insert(layer_id, expert_id, prefetch=False)
             if predictor == "cross_layer_adaptive" and ordinal > 0:
                 left_layer = int(call[ordinal - 1]["layer_id"])
-                left_selected = tuple(
-                    int(expert) for expert in call[ordinal - 1]["expert_ids"][0]
-                )
+                left_selected = tuple(int(expert) for expert in call[ordinal - 1]["expert_ids"][0])
                 table = adaptive_transitions.setdefault((left_layer, layer_id), {})
                 for source in left_selected:
                     table.setdefault(source, Counter()).update(selected)
@@ -268,10 +262,10 @@ def _simulate_prefetch(
                 for source in previous:
                     table.setdefault(source, Counter()).update(selected)
             previous_by_layer[layer_id] = selected
-            if (
-                predictor in {"cross_layer_transition", "cross_layer_adaptive"}
-                and ordinal + 1 < len(call)
-            ):
+            if predictor in {
+                "cross_layer_transition",
+                "cross_layer_adaptive",
+            } and ordinal + 1 < len(call):
                 next_layer = int(call[ordinal + 1]["layer_id"])
                 for expert_id in predict_transition(layer_id, next_layer, selected):
                     insert(next_layer, expert_id, prefetch=True)
@@ -280,6 +274,7 @@ def _simulate_prefetch(
     return {
         "predictor": predictor,
         "prefetch_budget_per_layer": budget,
+        "min_prediction_observations": min_prediction_observations,
         "capacity_per_layer": capacity_per_layer,
         "demand_hits": demand_hits,
         "exposed_demand_misses": demand_misses,
@@ -300,10 +295,13 @@ def replay_prefetch(
     capacity_per_layer: int,
     budgets: tuple[int, ...],
     record_size: int,
+    adaptive_min_observations: tuple[int, ...] = (1,),
 ) -> dict:
     """Evaluate ideal-completion prefetch policies without changing runtime math."""
     if capacity_per_layer < 1:
         raise ValueError("per-layer cache capacity must be positive")
+    if not adaptive_min_observations or any(value < 1 for value in adaptive_min_observations):
+        raise ValueError("adaptive minimum observations must be positive")
     trace = json.loads(trace_path.read_text())
     if trace.get("format") != "vference.route-trace.v1":
         raise ValueError(f"unsupported trace format: {trace.get('format')}")
@@ -322,12 +320,8 @@ def replay_prefetch(
         transitions,
         previous_by_layer,
     )
-    baseline["demand_read_bytes"] = (
-        baseline["exposed_demand_misses"] * record_size
-    )
-    baseline["total_physical_read_bytes"] = (
-        baseline["total_physical_reads"] * record_size
-    )
+    baseline["demand_read_bytes"] = baseline["exposed_demand_misses"] * record_size
+    baseline["total_physical_read_bytes"] = baseline["total_physical_reads"] * record_size
     results = []
     for budget in budgets:
         if budget < 1:
@@ -338,34 +332,38 @@ def replay_prefetch(
             "cross_layer_adaptive",
             "same_layer_transition",
         ):
-            result = _simulate_prefetch(
-                decode,
-                layer_ids,
-                capacity_per_layer,
-                budget,
-                predictor,
-                popularity,
-                transitions,
-                previous_by_layer,
+            observations = (
+                adaptive_min_observations if predictor == "cross_layer_adaptive" else (1,)
             )
-            result["demand_misses_avoided"] = (
-                baseline["exposed_demand_misses"] - result["exposed_demand_misses"]
-            )
-            result["physical_read_amplification"] = (
-                result["total_physical_reads"] / baseline["total_physical_reads"]
-            )
-            result["demand_read_bytes"] = result["exposed_demand_misses"] * record_size
-            result["prefetch_read_bytes"] = result["prefetch_reads"] * record_size
-            result["total_physical_read_bytes"] = (
-                result["total_physical_reads"] * record_size
-            )
-            results.append(result)
+            for min_observations in observations:
+                result = _simulate_prefetch(
+                    decode,
+                    layer_ids,
+                    capacity_per_layer,
+                    budget,
+                    predictor,
+                    popularity,
+                    transitions,
+                    previous_by_layer,
+                    min_prediction_observations=min_observations,
+                )
+                result["demand_misses_avoided"] = (
+                    baseline["exposed_demand_misses"] - result["exposed_demand_misses"]
+                )
+                result["physical_read_amplification"] = (
+                    result["total_physical_reads"] / baseline["total_physical_reads"]
+                )
+                result["demand_read_bytes"] = result["exposed_demand_misses"] * record_size
+                result["prefetch_read_bytes"] = result["prefetch_reads"] * record_size
+                result["total_physical_read_bytes"] = result["total_physical_reads"] * record_size
+                results.append(result)
     return {
         "trace": str(trace_path.resolve()),
         "prompt_tokens": trace.get("prompt_tokens"),
         "decode_model_calls": len(decode),
         "layers": len(layer_ids),
         "record_size": record_size,
+        "adaptive_min_observations": list(adaptive_min_observations),
         "baseline": baseline,
         "results": results,
     }
