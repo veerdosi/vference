@@ -175,7 +175,7 @@ def _corpus_verify(args: argparse.Namespace) -> None:
         prefetch_min_observations=args.prefetch_min_observations,
     )
     print_json(result)
-    if not result["all_tokens_exact"]:
+    if not result["all_tokens_exact"] or not result["all_step_logits_exact"]:
         raise SystemExit(1)
 
 

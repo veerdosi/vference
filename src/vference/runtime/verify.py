@@ -410,9 +410,7 @@ def verify_runtime_corpus(
     reference_store = None
     try:
 
-        def run_case(
-            case: dict[str, object],
-        ) -> tuple[np.ndarray, list[int], str, dict[str, int | float | str]]:
+        def run_case(case: dict[str, object]) -> dict[str, object]:
             prompt_tokens = tokenizer.apply_chat_template(
                 [{"role": "user", "content": str(case["prompt"])}],
                 add_generation_prompt=True,
@@ -438,26 +436,30 @@ def verify_runtime_corpus(
             if sampler is not None:
                 mx.random.seed(seed)
             output: list[int] = []
+            step_logits_sha256: list[str] = []
             eos_ids = set(tokenizer.eos_token_ids)
             for _ in range(int(case["max_tokens"])):
+                logit_bytes = np.asarray(logits[:, -1:].view(mx.uint16)).tobytes()
+                step_logits_sha256.append(hashlib.sha256(logit_bytes).hexdigest())
                 token = select_token(logits, sampler)
                 output.append(token)
                 if token in eos_ids:
                     break
                 logits = model(mx.array([[token]]), cache=cache)
                 mx.eval(logits)
-            return (
-                initial,
-                output,
-                tokenizer.decode(output),
-                {
+            return {
+                "initial_logits": initial,
+                "output_tokens": output,
+                "output_text": tokenizer.decode(output),
+                "step_logits_sha256": step_logits_sha256,
+                "sampler": {
                     "kind": "greedy" if sampler is None else "categorical",
                     "temperature": temperature,
                     "top_p": top_p,
                     "top_k": top_k,
                     "seed": seed,
                 },
-            )
+            }
 
         stable_results = [run_case(case) for case in cases]
         stable_stats = stable_store.stats()
@@ -469,17 +471,37 @@ def verify_runtime_corpus(
 
         results = []
         for case, stable, reference in zip(cases, stable_results, reference_results):
-            delta = np.abs(stable[0] - reference[0])
+            delta = np.abs(stable["initial_logits"] - reference["initial_logits"])
+            stable_step_logits = stable["step_logits_sha256"]
+            reference_step_logits = reference["step_logits_sha256"]
+            first_step_logits_difference = next(
+                (
+                    index
+                    for index, (left, right) in enumerate(
+                        zip(stable_step_logits, reference_step_logits)
+                    )
+                    if left != right
+                ),
+                None,
+            )
+            if first_step_logits_difference is None and len(stable_step_logits) != len(
+                reference_step_logits
+            ):
+                first_step_logits_difference = min(
+                    len(stable_step_logits), len(reference_step_logits)
+                )
             results.append(
                 {
                     "id": case["id"],
                     "initial_logits_max_abs_error": float(delta.max()),
                     "initial_logits_mean_abs_error": float(delta.mean()),
-                    "tokens_exact": stable[1] == reference[1],
-                    "stable_output_tokens": stable[1],
-                    "reference_output_tokens": reference[1],
-                    "output_text": stable[2],
-                    "sampler": stable[3],
+                    "step_logits_exact": first_step_logits_difference is None,
+                    "first_step_logits_difference": first_step_logits_difference,
+                    "tokens_exact": stable["output_tokens"] == reference["output_tokens"],
+                    "stable_output_tokens": stable["output_tokens"],
+                    "reference_output_tokens": reference["output_tokens"],
+                    "output_text": stable["output_text"],
+                    "sampler": stable["sampler"],
                 }
             )
         return {
@@ -490,6 +512,7 @@ def verify_runtime_corpus(
             "prefetch_budget": prefetch_budget,
             "prefetch_min_observations": prefetch_min_observations,
             "all_tokens_exact": all(result["tokens_exact"] for result in results),
+            "all_step_logits_exact": all(result["step_logits_exact"] for result in results),
             "max_initial_logits_abs_error": max(
                 result["initial_logits_max_abs_error"] for result in results
             ),
