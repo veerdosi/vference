@@ -101,11 +101,17 @@ class PackReader {
       expected += bytes;
     }
     ssize_t count;
+    if (expected_crc32 >= 0) scratch_.resize(static_cast<size_t>(expected));
     do {
-      count = ::preadv(fd_, vectors.data(), static_cast<int>(vectors.size()), file_offset);
+      if (expected_crc32 >= 0) {
+        count = ::pread(fd_, scratch_.data(), static_cast<size_t>(expected), file_offset);
+      } else {
+        count = ::preadv(
+            fd_, vectors.data(), static_cast<int>(vectors.size()), file_offset);
+      }
     } while (count < 0 && errno == EINTR);
     if (count < 0) {
-      throw std::runtime_error("preadv failed for " + path_ + ": " + std::strerror(errno));
+      throw std::runtime_error("pread failed for " + path_ + ": " + std::strerror(errno));
     }
     if (count != expected) {
       throw std::runtime_error(
@@ -113,17 +119,19 @@ class PackReader {
           ", got " + std::to_string(count));
     }
     if (expected_crc32 >= 0) {
-      uLong checksum = ::crc32(0L, Z_NULL, 0);
-      for (const auto& vector : vectors) {
-        checksum = ::crc32(
-            checksum,
-            static_cast<const Bytef*>(vector.iov_base),
-            static_cast<uInt>(vector.iov_len));
-      }
+      const uLong checksum = ::crc32(
+          0L, static_cast<const Bytef*>(scratch_.data()),
+          static_cast<uInt>(scratch_.size()));
       if (checksum != static_cast<uLong>(expected_crc32)) {
         throw std::runtime_error(
             "expert CRC32 mismatch for " + path_ + " at offset " +
             std::to_string(file_offset));
+      }
+      size_t source_offset = 0;
+      for (const auto& vector : vectors) {
+        std::memcpy(
+            vector.iov_base, scratch_.data() + source_offset, vector.iov_len);
+        source_offset += vector.iov_len;
       }
     }
     return static_cast<long>(count);
@@ -132,6 +140,7 @@ class PackReader {
  private:
   std::string path_;
   int fd_ = -1;
+  std::vector<unsigned char> scratch_;
 };
 
 }  // namespace
