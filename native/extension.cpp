@@ -5,7 +5,6 @@
 #include <cerrno>
 #include <cstring>
 #include <fcntl.h>
-#include <mutex>
 #include <stdexcept>
 #include <string>
 #include <sys/uio.h>
@@ -19,9 +18,6 @@ namespace mx = mlx::core;
 using namespace nb::literals;
 
 namespace {
-
-std::mutex owned_mutex;
-std::vector<mx::allocator::Buffer> owned_buffers;
 
 mx::Dtype dtype_from_name(const std::string& name) {
   if (name == "uint32") return mx::uint32;
@@ -40,11 +36,7 @@ mx::array owned_zeros(const std::vector<int>& shape, const std::string& dtype_na
   const size_t nbytes = elements * static_cast<size_t>(mx::size_of(dtype));
   auto buffer = mx::allocator::malloc(nbytes);
   std::memset(buffer.raw_ptr(), 0, nbytes);
-  {
-    std::lock_guard<std::mutex> lock(owned_mutex);
-    owned_buffers.push_back(buffer);
-  }
-  return mx::array(buffer, mlx_shape, dtype, [](mx::allocator::Buffer) {});
+  return mx::array(buffer, mlx_shape, dtype);
 }
 
 uintptr_t data_pointer(const mx::array& input) {

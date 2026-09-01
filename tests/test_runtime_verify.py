@@ -1,9 +1,26 @@
 from pathlib import Path
 
+import mlx.core as mx
+import numpy as np
 import pytest
 
 from vference.runtime.verify import verify_prefill_chunk_invariance
-from vference.runtime.generate import _store_stats_delta, _validate_prefill_chunk_size
+from vference.runtime.generate import (
+    _detach_last_logits,
+    _decode_resize_admission,
+    _store_stats_delta,
+    _validate_prefill_chunk_size,
+)
+
+
+def test_detach_last_logits_preserves_bfloat16_bits() -> None:
+    logits = mx.arange(24).reshape(1, 3, 8).astype(mx.bfloat16)
+    detached = _detach_last_logits(logits)
+    assert detached.shape == (1, 1, 8)
+    assert np.array_equal(
+        np.asarray(detached.view(mx.uint16)),
+        np.asarray(logits[:, -1:].view(mx.uint16)),
+    )
 
 
 @pytest.mark.parametrize(
@@ -87,3 +104,16 @@ def test_store_stats_delta_separates_phase_counters() -> None:
     assert delta["prefetch"]["submitted"] == 2
     assert delta["prefetch"]["total_physical_bytes"] == 14
     assert delta["per_layer"][0]["misses"] == 4
+
+
+def test_decode_resize_admission_preserves_headroom() -> None:
+    common = {
+        "resident_bytes": 1_945_100_424,
+        "model_state_bytes": 232_161_280,
+        "record_size": 1_769_472,
+        "prefill_capacity": 320,
+        "runtime_reserve_bytes": 18 * 1024**2,
+        "budget_bytes": 3 * 1024**3,
+    }
+    assert _decode_resize_admission(decode_capacity=560, **common)["admitted"]
+    assert not _decode_resize_admission(decode_capacity=640, **common)["admitted"]

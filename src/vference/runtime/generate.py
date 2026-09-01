@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import gc
 import statistics
 import time
 import json
@@ -7,12 +8,25 @@ import resource
 from pathlib import Path
 
 import mlx.core as mx
+import numpy as np
 import psutil
 
 from .admission import estimate_qwen35_admission
 from .model import load_streaming_qwen
 
 QUALIFIED_QWEN35_PREFILL_CHUNK_SIZE = 512
+DECODE_TRANSIENT_RESERVE_BYTES = 448 * 1024**2
+
+
+def _detach_last_logits(logits: mx.array) -> mx.array:
+    value = logits[:, -1:]
+    if value.dtype == mx.bfloat16:
+        host = np.asarray(value.view(mx.uint16)).copy()
+        detached = mx.array(host).view(mx.bfloat16)
+    else:
+        detached = mx.array(np.asarray(value).copy())
+    mx.eval(detached)
+    return detached
 
 
 def _validate_prefill_chunk_size(
@@ -119,6 +133,36 @@ def _store_stats_delta(before: dict[str, object], after: dict[str, object]) -> d
     return result
 
 
+def _decode_resize_admission(
+    *,
+    resident_bytes: int,
+    model_state_bytes: int,
+    record_size: int,
+    prefill_capacity: int,
+    decode_capacity: int,
+    runtime_reserve_bytes: int,
+    budget_bytes: int,
+) -> dict[str, int | bool]:
+    extra_pool_bytes = (decode_capacity - prefill_capacity) * record_size
+    estimated_peak_bytes = (
+        resident_bytes
+        + model_state_bytes
+        + extra_pool_bytes
+        + runtime_reserve_bytes
+        + DECODE_TRANSIENT_RESERVE_BYTES
+    )
+    return {
+        "admitted": estimated_peak_bytes <= budget_bytes,
+        "budget_bytes": budget_bytes,
+        "estimated_peak_bytes": estimated_peak_bytes,
+        "prefill_capacity": prefill_capacity,
+        "decode_capacity": decode_capacity,
+        "extra_pool_bytes": extra_pool_bytes,
+        "decode_transient_reserve_bytes": DECODE_TRANSIENT_RESERVE_BYTES,
+        "runtime_reserve_bytes": runtime_reserve_bytes,
+    }
+
+
 def generate_greedy(
     artifact: Path,
     prompt: str,
@@ -127,6 +171,7 @@ def generate_greedy(
     cache_capacity: int,
     chat_template: bool,
     enable_thinking: bool,
+    decode_cache_capacity: int | None = None,
     nocache: bool = False,
     trace_output: Path | None = None,
     store_kind: str = "python",
@@ -148,6 +193,8 @@ def generate_greedy(
         raise ValueError("max_tokens must be positive")
     if prefill_chunk_size < 1:
         raise ValueError("prefill chunk size must be positive")
+    if decode_cache_capacity is not None and decode_cache_capacity < 1:
+        raise ValueError("decode expert cache capacity must be positive")
     if repeat_raw_prompt_to_tokens is not None and repeat_raw_prompt_to_tokens < 1:
         raise ValueError("repeated raw prompt token count must be positive")
     if (needle is None) != (needle_context_tokens is None):
@@ -159,6 +206,9 @@ def generate_greedy(
     effective_decode_cache_policy = decode_cache_policy
     if effective_decode_cache_policy is None:
         effective_decode_cache_policy = "layer" if store_kind == "stable" else cache_policy
+    effective_decode_cache_capacity = decode_cache_capacity or cache_capacity
+    if effective_decode_cache_capacity != cache_capacity and store_kind != "stable":
+        raise ValueError("phase-specific cache capacity requires the stable store")
     process = psutil.Process()
     rss_before = process.memory_info().rss
     memory_before = _memory_snapshot()
@@ -231,21 +281,40 @@ def generate_greedy(
         config = json.loads((artifact / "config.json").read_text())
         if max_mlx_memory_bytes is None:
             max_mlx_memory_bytes = int(psutil.virtual_memory().total * 0.375)
+        runtime_reserve_bytes = (
+            (16 + 2 * max(0, prefetch_budget - 1)) * 1024**2 if prefetch_policy != "none" else 0
+        )
         admission = estimate_qwen35_admission(
             config,
             resident_bytes=mx.get_active_memory(),
             total_tokens=len(prompt_tokens) + max_tokens,
             prefill_chunk_size=prefill_chunk_size,
             budget_bytes=max_mlx_memory_bytes,
-            runtime_reserve_bytes=(
-                (16 + 2 * max(0, prefetch_budget - 1)) * 1024**2 if prefetch_policy != "none" else 0
-            ),
+            runtime_reserve_bytes=runtime_reserve_bytes,
         )
         if not admission.admitted:
             raise MemoryError(
                 "context rejected before prefill: estimated MLX peak "
                 f"{admission.estimated_peak_bytes / 1024**3:.2f} GiB exceeds "
                 f"the {admission.budget_bytes / 1024**3:.2f} GiB budget"
+            )
+        decode_resize_admission = _decode_resize_admission(
+            resident_bytes=admission.resident_bytes,
+            model_state_bytes=admission.model_state_bytes,
+            record_size=int(store.record_size),
+            prefill_capacity=cache_capacity,
+            decode_capacity=effective_decode_cache_capacity,
+            runtime_reserve_bytes=runtime_reserve_bytes,
+            budget_bytes=max_mlx_memory_bytes,
+        )
+        if (
+            effective_decode_cache_capacity != cache_capacity
+            and not decode_resize_admission["admitted"]
+        ):
+            raise MemoryError(
+                "decode cache resize rejected before prefill: estimated MLX peak "
+                f"{decode_resize_admission['estimated_peak_bytes'] / 1024**3:.2f} GiB "
+                f"exceeds the {max_mlx_memory_bytes / 1024**3:.2f} GiB budget"
             )
 
         cache = model.make_cache()
@@ -269,11 +338,23 @@ def generate_greedy(
         prefill_seconds = time.perf_counter() - prefill_started
         memory_after_prefill = _memory_snapshot()
         prefill_store_stats = store.stats()
+        prefill_mlx_peak_bytes = mx.get_peak_memory()
 
-        if effective_decode_cache_policy != cache_policy:
+        transition_started = time.perf_counter()
+        if effective_decode_cache_capacity != cache_capacity:
+            logits = _detach_last_logits(logits)
+            gc.collect()
+            mx.clear_cache()
+            store.resize_capacity(effective_decode_cache_capacity, effective_decode_cache_policy)
+        elif effective_decode_cache_policy != cache_policy:
             if store_kind != "stable":
                 raise ValueError("phase-specific cache policy requires the stable store")
             store.set_cache_policy(effective_decode_cache_policy)
+        phase_transition_seconds = time.perf_counter() - transition_started
+        memory_after_phase_transition = _memory_snapshot()
+        phase_transition_mlx_active_bytes = mx.get_active_memory()
+        phase_transition_mlx_cache_bytes = mx.get_cache_memory()
+        mx.reset_peak_memory()
 
         output_tokens: list[int] = []
         decode_latencies: list[float] = []
@@ -295,16 +376,20 @@ def generate_greedy(
         swap_after = psutil.swap_memory()
         memory_after_generation = _memory_snapshot()
         final_store_stats = store.stats()
+        decode_mlx_peak_bytes = mx.get_peak_memory()
         result = {
             "prompt": prompt,
             "chat_template": chat_template,
             "prompt_mode": prompt_mode,
             "needle": needle,
             "admission": admission.as_dict(),
+            "decode_resize_admission": decode_resize_admission,
             "enable_thinking": enable_thinking,
             "store_kind": store_kind,
             "cache_policy": cache_policy,
             "decode_cache_policy": effective_decode_cache_policy,
+            "prefill_cache_capacity": cache_capacity,
+            "decode_cache_capacity": effective_decode_cache_capacity,
             "prefetch_policy": prefetch_policy,
             "prefetch_budget": prefetch_budget,
             "prefetch_min_observations": prefetch_min_observations,
@@ -316,6 +401,9 @@ def generate_greedy(
             "output_text": tokenizer.decode(output_tokens),
             "load_seconds": load_seconds,
             "prefill_seconds": prefill_seconds,
+            "phase_transition_seconds": phase_transition_seconds,
+            "phase_transition_mlx_active_bytes": phase_transition_mlx_active_bytes,
+            "phase_transition_mlx_cache_bytes": phase_transition_mlx_cache_bytes,
             "time_to_first_token_seconds": first_token_at - model_ready_at,
             "cold_start_time_to_first_token_seconds": first_token_at - request_started,
             "decode_model_calls": len(decode_latencies),
@@ -331,7 +419,9 @@ def generate_greedy(
                 "decode_delta": _store_stats_delta(prefill_store_stats, final_store_stats),
             },
             "mlx_active_bytes": mx.get_active_memory(),
-            "mlx_peak_bytes": mx.get_peak_memory(),
+            "mlx_peak_bytes": max(prefill_mlx_peak_bytes, decode_mlx_peak_bytes),
+            "prefill_mlx_peak_bytes": prefill_mlx_peak_bytes,
+            "decode_mlx_peak_bytes": decode_mlx_peak_bytes,
             "mlx_cache_bytes": mx.get_cache_memory(),
             "model_state_bytes": _state_bytes(cache),
             "process_rss_bytes": {
@@ -343,6 +433,7 @@ def generate_greedy(
                 "before_load": memory_before,
                 "after_load": memory_after_load,
                 "after_prefill": memory_after_prefill,
+                "after_phase_transition": memory_after_phase_transition,
                 "after_generation": memory_after_generation,
             },
             "system_swap_bytes": {

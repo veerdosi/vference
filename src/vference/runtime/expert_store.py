@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import gc
 import json
 import os
 import fcntl
@@ -386,6 +387,7 @@ class StableSlotExpertStore(SynchronousExpertStore):
         self._cache: OrderedDict[tuple[int, int], int] = OrderedDict()
         self._slot_keys: list[tuple[int, int] | None] = [None] * capacity
         self.policy_transitions: list[dict[str, str]] = []
+        self.capacity_transitions: list[dict[str, int]] = []
 
         self.hits = 0
         self.misses = 0
@@ -433,8 +435,17 @@ class StableSlotExpertStore(SynchronousExpertStore):
         if self._prefetch_fd >= 0:
             os.close(self._prefetch_fd)
             self._prefetch_fd = -1
+        mx.synchronize()
         self._cache.clear()
+        self._slot_keys = []
+        self._free_slots = []
+        self._free_slots_by_layer = {}
+        self._layer_capacities = {}
+        self._ordered_pools = []
+        self._pools = {}
         self._reader = None
+        gc.collect()
+        mx.clear_cache()
 
     def set_cache_policy(self, cache_policy: str) -> None:
         """Synchronously clear and repartition slots between inference phases."""
@@ -461,6 +472,65 @@ class StableSlotExpertStore(SynchronousExpertStore):
                 start += count
         self.cache_policy = cache_policy
         self.policy_transitions.append({"from": previous, "to": cache_policy})
+
+    def resize_capacity(self, capacity: int, cache_policy: str | None = None) -> None:
+        """Replace stable pools at a synchronized inference-phase boundary."""
+        if capacity < 1:
+            raise ValueError("expert cache capacity must be positive")
+        target_policy = cache_policy or self.cache_policy
+        if target_policy not in {"global", "layer", "demand"}:
+            raise ValueError(f"unknown stable cache policy: {target_policy}")
+        if target_policy == "layer" and capacity < self.layer_count:
+            raise ValueError("layer-partitioned cache needs at least one slot per layer")
+        if capacity == self.capacity:
+            self.set_cache_policy(target_policy)
+            return
+
+        mx.synchronize()
+        for key, future in list(self._pending_prefetch.items()):
+            self.prefetch_wrong += 1
+            if future.cancel():
+                self.prefetch_cancelled += 1
+                del self._pending_prefetch[key]
+            else:
+                self._finish_prefetch(key)
+                self.prefetch_unused += 1
+
+        previous_capacity = self.capacity
+        previous_policy = self.cache_policy
+        self._cache.clear()
+        self._slot_keys = []
+        self._free_slots = []
+        self._free_slots_by_layer = {}
+        self._layer_capacities = {}
+        self._ordered_pools = []
+        self._pools = {}
+        gc.collect()
+        mx.clear_cache()
+
+        dtype_names = {"U32": "uint32", "BF16": "bfloat16"}
+        self._pools = {
+            component.suffix: self._native.owned_zeros(
+                [capacity, *component.shape], dtype_names[component.dtype]
+            )
+            for component in self.components
+        }
+        self._ordered_pools = [self._pools[component.suffix] for component in self.components]
+        self.capacity = capacity
+        self._slot_keys = [None] * capacity
+        self._free_slots = list(range(capacity - 1, -1, -1))
+        if target_policy == "layer":
+            base, extra = divmod(capacity, self.layer_count)
+            start = 0
+            for ordinal, layer_id in enumerate(self.layer_ids):
+                count = base + (ordinal < extra)
+                self._layer_capacities[layer_id] = count
+                self._free_slots_by_layer[layer_id] = list(range(start + count - 1, start - 1, -1))
+                start += count
+        self.cache_policy = target_policy
+        self.capacity_transitions.append({"from": previous_capacity, "to": capacity})
+        if previous_policy != target_policy:
+            self.policy_transitions.append({"from": previous_policy, "to": target_policy})
 
     def _observe_transition(self, layer_id: int, host_indices: np.ndarray) -> None:
         if self.prefetch_policy == "none":
@@ -773,6 +843,7 @@ class StableSlotExpertStore(SynchronousExpertStore):
         values["prefetch_budget"] = self.prefetch_budget
         values["prefetch_min_observations"] = self.prefetch_min_observations
         values["policy_transitions"] = list(self.policy_transitions)
+        values["capacity_transitions"] = list(self.capacity_transitions)
         values["prefetch"] = {
             "submitted": self.prefetch_submitted,
             "bytes_read": self.prefetch_bytes_read,

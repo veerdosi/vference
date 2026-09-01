@@ -211,6 +211,11 @@ def test_stable_slots_match_math_and_keep_addresses(tmp_path: Path) -> None:
         mx.eval(demand_second)
         assert stable.stats()["misses"] == misses_before + 4
         assert stable.pool_pointers() == pointers
+        stable.resize_capacity(3, "layer")
+        assert stable.stats()["capacity"] == 3
+        assert stable.stats()["capacity_transitions"] == [{"from": 2, "to": 3}]
+        after_resize = stable.execute(0, x, mx.array([[[0, 1]]], dtype=mx.int32))
+        mx.eval(after_resize)
 
     with SynchronousExpertStore(tmp_path, capacity=2) as reference:
         expected_first = reference.execute(0, x, mx.array([[[0, 1]]], dtype=mx.int32))
@@ -238,6 +243,10 @@ def test_stable_slots_match_math_and_keep_addresses(tmp_path: Path) -> None:
     )
     assert np.array_equal(
         np.asarray(demand_second.view(mx.uint16)),
+        np.asarray(expected_first.view(mx.uint16)),
+    )
+    assert np.array_equal(
+        np.asarray(after_resize.view(mx.uint16)),
         np.asarray(expected_first.view(mx.uint16)),
     )
 

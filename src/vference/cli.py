@@ -122,6 +122,7 @@ def _stream_generate(args: argparse.Namespace) -> None:
             args.prompt,
             max_tokens=args.max_tokens,
             cache_capacity=args.cache_capacity,
+            decode_cache_capacity=args.decode_cache_capacity,
             chat_template=not args.raw_prompt,
             enable_thinking=args.thinking,
             nocache=args.nocache,
@@ -248,6 +249,7 @@ def build_parser() -> argparse.ArgumentParser:
     generate_parser.add_argument("--prompt", required=True)
     generate_parser.add_argument("--max-tokens", type=int, default=16)
     generate_parser.add_argument("--cache-capacity", type=int, default=320)
+    generate_parser.add_argument("--decode-cache-capacity", type=int)
     generate_parser.add_argument("--raw-prompt", action="store_true")
     generate_parser.add_argument("--thinking", action="store_true")
     generate_parser.add_argument("--nocache", action="store_true")
