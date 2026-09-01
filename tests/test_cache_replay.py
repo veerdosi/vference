@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from vference.bench.cache import replay_trace
+from vference.bench.cache import replay_prefetch, replay_trace
 
 
 def test_replay_global_and_partitioned_lru(tmp_path: Path) -> None:
@@ -27,3 +27,33 @@ def test_replay_global_and_partitioned_lru(tmp_path: Path) -> None:
     assert by_key[("global_lru", 4)]["hits"] == 2
     assert by_key[("partitioned_lru", 4)]["hits"] == 2
     assert result["unique_experts"] == 6
+
+
+def test_prefetch_replay_separates_exposed_and_physical_reads(tmp_path: Path) -> None:
+    trace = {
+        "format": "vference.route-trace.v1",
+        "prompt_tokens": 2,
+        "output_tokens": [1, 2, 3],
+        "records": [
+            {"layer_id": 0, "expert_ids": [[0], [0]]},
+            {"layer_id": 1, "expert_ids": [[2], [2]]},
+            {"layer_id": 0, "expert_ids": [[0]]},
+            {"layer_id": 1, "expert_ids": [[2]]},
+            {"layer_id": 0, "expert_ids": [[0]]},
+            {"layer_id": 1, "expert_ids": [[2]]},
+        ],
+    }
+    path = tmp_path / "trace.json"
+    path.write_text(json.dumps(trace))
+    result = replay_prefetch(
+        path, capacity_per_layer=1, budgets=(1,), record_size=100
+    )
+    assert result["baseline"]["exposed_demand_misses"] == 2
+    by_predictor = {item["predictor"]: item for item in result["results"]}
+    transition = by_predictor["cross_layer_transition"]
+    assert transition["exposed_demand_misses"] == 1
+    assert transition["useful_prefetch_reads"] == 1
+    assert transition["total_physical_reads"] == 2
+    static = by_predictor["static_popularity"]
+    assert static["exposed_demand_misses"] == 0
+    assert static["total_physical_reads"] == 2

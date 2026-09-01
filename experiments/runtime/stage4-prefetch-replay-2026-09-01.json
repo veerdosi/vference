@@ -1,0 +1,84 @@
+{
+  "artifact_sha256": "9b26ebdf13a2863d607e1c3ea6e2528ff0267b7f472f8fd37fd20d3adb497e18",
+  "date_local": "2026-09-01",
+  "decision": {
+    "live_prefetch": "not admitted",
+    "reason": "The cross-layer predictor is promising after a long repetitive prefill but does not generalize to the short-prompt trace. Static popularity pollutes both evaluated caches.",
+    "runtime_default": "no prefetch"
+  },
+  "method": {
+    "cache_model": "per-layer LRU with exact demand insertion",
+    "prediction_completion": "ideal: every speculative read completes immediately before target-layer demand",
+    "training": "prefill routes only; decode routes are never used before prediction",
+    "warning": "Ideal completion is an upper bound. Live I/O can only expose more stalls unless it overlaps useful work."
+  },
+  "record_size_bytes": 1769472,
+  "traces": [
+    {
+      "cache_capacity_per_layer": 8,
+      "decode_model_calls": 255,
+      "prompt_tokens": 7936,
+      "sha256": "4b8ac472eeb76b24ee14e744e0214c4e3f810928e986176833094bf4629af54d",
+      "workload": "Repeated raw prompt used by the accepted 8192-total-token qualification; routes and tokens matched the accepted baseline.",
+      "baseline": {
+        "demand_hit_rate": 0.12957107843137255,
+        "exposed_demand_misses": 71027,
+        "physical_reads": 71027
+      },
+      "cross_layer_transition": [
+        {
+          "budget": 1,
+          "demand_misses_avoided": 5133,
+          "physical_read_amplification": 0.994847030002675,
+          "prefetch_reads": 4767,
+          "useful_prefetch_rate": 0.8619676945668135
+        },
+        {
+          "budget": 2,
+          "demand_misses_avoided": 10022,
+          "physical_read_amplification": 1.0092922409787828,
+          "prefetch_reads": 10682,
+          "useful_prefetch_rate": 0.8061224489795918
+        }
+      ],
+      "static_popularity_budget_1": {
+        "demand_misses_avoided": 2350,
+        "physical_read_amplification": 1.0337899671955735,
+        "useful_prefetch_rate": 0.4648421052631579
+      }
+    },
+    {
+      "cache_capacity_per_layer": 16,
+      "decode_model_calls": 255,
+      "prompt_tokens": 35,
+      "sha256": "05b5870e4169116592599a4d1611af4b6ad7fd80eba7fd290e03458daa4a92b1",
+      "workload": "Technical-essay chat prompt followed by 256 generated tokens.",
+      "baseline": {
+        "demand_hit_rate": 0.4856004901960784,
+        "exposed_demand_misses": 41975,
+        "physical_reads": 41975
+      },
+      "cross_layer_transition": [
+        {
+          "budget": 1,
+          "demand_misses_avoided": -40,
+          "physical_read_amplification": 1.048671828469327,
+          "prefetch_reads": 2003,
+          "useful_prefetch_rate": 0.2381427858212681
+        },
+        {
+          "budget": 2,
+          "demand_misses_avoided": 201,
+          "physical_read_amplification": 1.1002739726027397,
+          "prefetch_reads": 4410,
+          "useful_prefetch_rate": 0.27392290249433104
+        }
+      ],
+      "static_popularity_budget_1": {
+        "demand_misses_avoided": -857,
+        "physical_read_amplification": 1.0213698630136987,
+        "useful_prefetch_rate": 0.8
+      }
+    }
+  ]
+}

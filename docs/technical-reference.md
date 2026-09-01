@@ -478,6 +478,20 @@ demand I/O and must not evict an expert whose predicted next use is sooner than
 the candidate's. Report precision, recall, useful-prefetch rate, late-prefetch
 rate, cache pollution, and physical bytes/token—not just hit rate.
 
+The first offline replay implements static per-layer popularity and a
+prefill-trained cross-layer transition table under an intentionally optimistic
+assumption: predicted reads finish before the next layer demands them. On the
+repetitive 7,936-token qualification trace with eight slots per layer, a
+one-record transition budget avoided 5,133 of 71,027 exposed misses, achieved
+86.2% useful-prefetch reads, and used 0.5% fewer total physical reads. A
+two-record budget avoided 10,022 misses with 0.9% read amplification. This did
+not generalize to a 35-token technical prompt with 16 slots per layer: the
+one-record policy added 40 exposed misses and 4.9% physical reads, while the
+two-record policy avoided only 201 misses at 10.0% amplification. Static
+popularity polluted both caches. Live prefetch is therefore not admitted yet;
+the no-prefetch path remains the default. See
+`experiments/runtime/stage4-prefetch-replay-2026-09-01.json`.
+
 ### 5.7 Prefill is a separate operating mode
 
 Prefill routes many prompt tokens at once and can touch a much wider union of
@@ -900,6 +914,12 @@ remain future work justified only by profiling.
 Add bounded native I/O and evaluate policies offline before live integration.
 Prefetch must increase throughput or reduce p95 stalls without increasing
 memory above budget or changing outputs. Keep a no-prefetch baseline in CI.
+**In progress:** the offline evaluator now separates exposed demand misses,
+useful speculative reads, eviction pollution, and total physical reads. The
+first cross-layer policy passed on a repetitive long prefill but failed to
+generalize to a short prompt, so asynchronous live integration is deliberately
+deferred until a representative multi-domain trace corpus clears the replay
+gate.
 
 ### Stage 5 — bounded prefill and long contexts
 

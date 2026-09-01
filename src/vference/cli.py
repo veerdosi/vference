@@ -8,7 +8,7 @@ from pathlib import Path
 from .artifacts.builder import build_qwen35_artifact, verify_qwen35_artifact
 from .artifacts.safetensors import classify_tensor, scan_model
 from .bench.storage import probe_storage
-from .bench.cache import replay_trace
+from .bench.cache import replay_prefetch, replay_trace
 from .experiments import append_record, make_record
 from .runtime.verify import (
     verify_multi_turn_state,
@@ -176,6 +176,17 @@ def _route_replay(args: argparse.Namespace) -> None:
     )
 
 
+def _prefetch_replay(args: argparse.Namespace) -> None:
+    print_json(
+        replay_prefetch(
+            args.trace,
+            capacity_per_layer=args.capacity_per_layer,
+            budgets=tuple(args.budgets),
+            record_size=args.record_size,
+        )
+    )
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="vference")
     commands = parser.add_subparsers(required=True)
@@ -253,6 +264,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     replay_parser.add_argument("--record-size", type=int, default=1_769_472)
     replay_parser.set_defaults(func=_route_replay)
+
+    prefetch_parser = commands.add_parser("prefetch-replay")
+    prefetch_parser.add_argument("trace", type=Path)
+    prefetch_parser.add_argument("--capacity-per-layer", type=int, default=8)
+    prefetch_parser.add_argument("--budgets", nargs="+", type=int, default=[1, 2, 4, 8])
+    prefetch_parser.add_argument("--record-size", type=int, default=1_769_472)
+    prefetch_parser.set_defaults(func=_prefetch_replay)
 
     storage_parser = commands.add_parser("storage-probe")
     storage_parser.add_argument("file", type=Path)
