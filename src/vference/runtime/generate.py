@@ -62,6 +62,63 @@ def _memory_snapshot() -> dict[str, int | float]:
     }
 
 
+def _store_stats_delta(before: dict[str, object], after: dict[str, object]) -> dict[str, object]:
+    def counters(
+        left: dict[str, object], right: dict[str, object], fields: tuple[str, ...]
+    ) -> dict[str, int | float]:
+        return {
+            field: right.get(field, 0) - left.get(field, 0)  # type: ignore[operator]
+            for field in fields
+        }
+
+    result: dict[str, object] = counters(before, after, ("hits", "misses", "bytes_read"))
+    before_timing = before.get("timing_seconds", {})
+    after_timing = after.get("timing_seconds", {})
+    assert isinstance(before_timing, dict) and isinstance(after_timing, dict)
+    result["timing_seconds"] = counters(
+        before_timing,
+        after_timing,
+        ("pread", "materialize", "router_and_graph_wait", "execute_total"),
+    )
+
+    before_prefetch = before.get("prefetch")
+    after_prefetch = after.get("prefetch")
+    if isinstance(before_prefetch, dict) and isinstance(after_prefetch, dict):
+        result["prefetch"] = counters(
+            before_prefetch,
+            after_prefetch,
+            (
+                "submitted",
+                "bytes_read",
+                "useful",
+                "late",
+                "wrong",
+                "unused_completed",
+                "cancelled",
+                "failed",
+                "skipped_busy",
+                "already_resident",
+                "wait_seconds",
+                "copy_seconds",
+                "total_physical_bytes",
+            ),
+        )
+
+    before_layers = before.get("per_layer", [])
+    after_layers = after.get("per_layer", [])
+    assert isinstance(before_layers, list) and isinstance(after_layers, list)
+    result["per_layer"] = [
+        counters(
+            left,
+            right,
+            ("hits", "misses", "read_seconds", "materialize_seconds"),
+        )
+        for left, right in zip(before_layers, after_layers)
+        if isinstance(left, dict) and isinstance(right, dict)
+    ]
+    return result
+
+
 def generate_greedy(
     artifact: Path,
     prompt: str,
@@ -211,6 +268,7 @@ def generate_greedy(
             prefill_chunks.append(chunk_memory)
         prefill_seconds = time.perf_counter() - prefill_started
         memory_after_prefill = _memory_snapshot()
+        prefill_store_stats = store.stats()
 
         if effective_decode_cache_policy != cache_policy:
             if store_kind != "stable":
@@ -236,6 +294,7 @@ def generate_greedy(
 
         swap_after = psutil.swap_memory()
         memory_after_generation = _memory_snapshot()
+        final_store_stats = store.stats()
         result = {
             "prompt": prompt,
             "chat_template": chat_template,
@@ -266,7 +325,11 @@ def generate_greedy(
             "decode_latency_seconds": (
                 _latency_summary(decode_latencies) if decode_latencies else None
             ),
-            "expert_store": store.stats(),
+            "expert_store": final_store_stats,
+            "expert_store_phases": {
+                "prefill": prefill_store_stats,
+                "decode_delta": _store_stats_delta(prefill_store_stats, final_store_stats),
+            },
             "mlx_active_bytes": mx.get_active_memory(),
             "mlx_peak_bytes": mx.get_peak_memory(),
             "mlx_cache_bytes": mx.get_cache_memory(),
