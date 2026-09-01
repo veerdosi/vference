@@ -1,0 +1,172 @@
+{
+  "artifact": {
+    "expert_pack_bytes": 18119393280,
+    "expert_pack_sha256": "9b26ebdf13a2863d607e1c3ea6e2528ff0267b7f472f8fd37fd20d3adb497e18",
+    "model_revision": "1e20fd8d42056f870933bf98ca6211024744f7ec",
+    "repository": "mlx-community/Qwen3.5-35B-A3B-4bit"
+  },
+  "benchmark_commits": [
+    "5cf71cf6096ad7b3bd8280edc28b1161388cdea7",
+    "12ac20aabca5546a522f241974ec0359dc6642c3"
+  ],
+  "benchmark_window_local": "2026-09-01T17:07:00+08:00/2026-09-01T17:49:03+08:00",
+  "cache_state": "Each process began with an empty 320-record stable expert cache; experts.pack used F_NOCACHE.",
+  "correctness": {
+    "accepted_8k_output_token_count": 256,
+    "accepted_8k_output_token_sha256": "f4b04a69f0bb425f65d7103580aedf78b786bc324b6c2100083314a9a76b88bd",
+    "canonical_hash_encoding": "SHA-256 of compact JSON token list without a trailing newline",
+    "five_domain_all_tokens_exact": true,
+    "five_domain_case_count": 5,
+    "five_domain_max_initial_logits_abs_error": 0.0,
+    "five_domain_result": "/tmp/vference-prefetch-budget2-corpus.json",
+    "prefetch_failures": 0
+  },
+  "decision": {
+    "default_policy": "none",
+    "experimental_policy": "adaptive_cross with prefetch_budget=2",
+    "reason": "Both 512-token-chunk runs cleared 2 tok/s and preserved exact output, and the five-domain corpus had zero logit error. One of two runs increased system-wide swap occupancy by 145.6 MB while the captured repetition decreased it by 8.4 MB, and throughput varied materially. Keep the policy opt-in until repeated clean-host runs establish the sustained memory-pressure envelope.",
+    "rejected_variant": "The 256-token prefill chunk reduced peak MLX memory but changed output token 72 even with prefetch disabled, so it is not a quality-equivalent optimization."
+  },
+  "dependencies": {
+    "mlx": "0.32.2",
+    "mlx_lm": "0.31.3",
+    "nanobind": "2.15.0"
+  },
+  "hardware": {
+    "chip": "Apple M2",
+    "internal_free_bytes_after": 54772084736,
+    "memory_bytes": 8589934592,
+    "model": "Mac14,2",
+    "power": "Power source was observed as battery before the first run and AC after the captured repetition. This was not a controlled power comparison and is metadata only.",
+    "storage": "Internal APFS /dev/disk3s5 over Apple Fabric",
+    "thermal": "pmset reported no thermal, performance, or CPU power warning after the captured repetition"
+  },
+  "operating_system": {
+    "build": "25G83",
+    "version": "26.6.2"
+  },
+  "prefetch_configuration": {
+    "budget_records": 2,
+    "policy": "adaptive_cross",
+    "publication_rule": "A staged record is copied into an MLX slot only after an exact router demand for that same layer and expert.",
+    "staging_worker_count": 1
+  },
+  "rejected_chunk256": {
+    "candidate": {
+      "decode_tokens_per_second": 2.4710304398005762,
+      "generated_tokens": 256,
+      "mlx_peak_bytes": 2553476250,
+      "output_token_sha256": "d66fbfe68dc9167006e1de39023dbb8772183246e2c1a8f355fed7e0d3b1c4d4",
+      "prefill_seconds": 270.67516324997996,
+      "swap_delta_bytes": 0,
+      "swap_out_delta_bytes": 14516224
+    },
+    "first_difference": {
+      "accepted_token_id": 95088,
+      "candidate_token_id": 69355,
+      "zero_based_output_index": 72
+    },
+    "no_prefetch_isolation": {
+      "generated_tokens": 73,
+      "matches_budget2_candidate_prefix": true,
+      "matches_chunk512_accepted_prefix": false,
+      "mlx_peak_bytes": 2553476250,
+      "prefill_seconds": 268.0275423330022,
+      "swap_delta_bytes": 0,
+      "swap_out_delta_bytes": 11059200
+    },
+    "result": "Rejected. The output change follows prefill chunk size, not prefetch. Chunk size is part of the qualified model-execution configuration until chunk-boundary invariance is fixed and proven."
+  },
+  "run_summary": {
+    "decode_tokens_per_second_max": 2.49491471156584,
+    "decode_tokens_per_second_mean": 2.3268492486584123,
+    "decode_tokens_per_second_min": 2.1587837857509844,
+    "decode_tokens_per_second_sample_stddev": 0.23768045701019683,
+    "physical_read_amplification_vs_no_prefetch_control": 1.013432474291125,
+    "repetitions": 2,
+    "throughput_improvement_vs_no_prefetch_control_percent_mean": 24.937902791840582
+  },
+  "runs": [
+    {
+      "commit": "5cf71cf6096ad7b3bd8280edc28b1161388cdea7",
+      "decode_latency_seconds": {
+        "max": 0.7597575830004644,
+        "mean": 0.46322378674533454,
+        "p50": 0.45085704102530144,
+        "p95": 0.5475410000071861
+      },
+      "decode_tokens_per_second": 2.1587837857509844,
+      "expert_demand_bytes": 225595293696,
+      "expert_execute_seconds": 308.042704654,
+      "expert_physical_bytes": 244310999040,
+      "expert_pread_seconds": 159.815420431,
+      "expert_router_and_graph_wait_seconds": 142.29349169,
+      "generated_tokens": 256,
+      "mlx_peak_bytes": 2903312538,
+      "prefetch": {
+        "bytes": 18715705344,
+        "late": 941,
+        "submitted": 10577,
+        "useful": 8744,
+        "wait_seconds": 0.056173475,
+        "wrong": 1833
+      },
+      "prefill_seconds": 203.26689945801627,
+      "process_rss_high_water_bytes": 1355874304,
+      "swap": {
+        "occupancy_delta_bytes": 145620992,
+        "swap_in_delta_bytes": 4675551232,
+        "swap_out_delta_bytes": 37617664
+      },
+      "time_to_first_token_seconds": null,
+      "trace": "/tmp/vference-prefetch-8k-budget2-clean.json"
+    },
+    {
+      "cold_start_time_to_first_token_seconds": 195.60231433299487,
+      "commit": "12ac20aabca5546a522f241974ec0359dc6642c3",
+      "decode_latency_seconds": {
+        "max": 0.6537072079954669,
+        "mean": 0.4008153045730318,
+        "p50": 0.3951477920054458,
+        "p95": 0.4316622920159716
+      },
+      "decode_tokens_per_second": 2.49491471156584,
+      "expert_demand_bytes": 225600602112,
+      "expert_execute_seconds": 284.596621551,
+      "expert_physical_bytes": 244300382208,
+      "expert_pread_seconds": 159.082063133,
+      "expert_router_and_graph_wait_seconds": 120.502074209,
+      "generated_tokens": 256,
+      "mlx_peak_bytes": 2903312538,
+      "prefetch": {
+        "bytes": 18699780096,
+        "late": 362,
+        "submitted": 10568,
+        "useful": 8741,
+        "wait_seconds": 0.019576291,
+        "wrong": 1828
+      },
+      "prefill_seconds": 193.67940504199942,
+      "process_rss_high_water_bytes": 1752317952,
+      "result": "/tmp/vference-prefetch-8k-budget2-chunk512-repeat.result.json",
+      "swap": {
+        "occupancy_delta_bytes": -8388608,
+        "swap_in_delta_bytes": 1634205696,
+        "swap_out_delta_bytes": 6619136
+      },
+      "time_to_first_token_seconds": 193.68187541601947,
+      "trace": "/tmp/vference-prefetch-8k-budget2-chunk512-repeat.trace.json"
+    }
+  ],
+  "workload": {
+    "cache_capacity_records": 320,
+    "decode_cache_policy": "layer",
+    "generated_tokens": 256,
+    "greedy": true,
+    "prefill_cache_policy": "global",
+    "prefill_chunk_size": 512,
+    "prompt_mode": "synthetic_repeated_raw_tokens",
+    "prompt_tokens": 7936,
+    "total_tokens": 8192
+  }
+}

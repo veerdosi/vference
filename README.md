@@ -77,3 +77,11 @@ with `--prefetch-policy adaptive_cross --prefetch-budget 1`. It improved a short
 3.8% and the 8K workload by 4.4% with exact outputs, but the measured 8K result
 was 1.944 tok/s and therefore remains below the 2 tok/s gate. Power source is
 recorded as metadata, not treated as a separate runtime qualification.
+
+A two-record budget is the current faster experimental setting:
+`--prefetch-policy adaptive_cross --prefetch-budget 2`. Two exact 8K runs
+measured 2.159 and 2.495 decode tok/s, and the five-domain corpus retained exact
+tokens with zero initial-logit error. It remains opt-in because throughput and
+system-wide swap occupancy varied between repetitions. Keep the qualified
+prefill chunk at 512: a 256-token chunk changed the output sequence even with
+prefetch disabled and is rejected until chunk-boundary invariance is fixed.

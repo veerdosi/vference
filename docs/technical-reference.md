@@ -514,6 +514,20 @@ passes the sustained gate in the Mac's current operating state. See
 `experiments/runtime/stage4-prefetch-replay-2026-09-01.json` and
 `experiments/runtime/stage4-live-prefetch-2026-09-01.json`.
 
+The live policy now accepts an explicit bounded staging budget. With two
+records, two output-exact 8K/256-token runs measured 2.159 and 2.495 decode
+tok/s (mean 2.327), versus the contemporaneous no-prefetch result of 1.862
+tok/s. Mean physical-read amplification versus that control was 1.34%, and
+82.7% of completed speculative records were useful. The captured repetition
+reported 193.682 seconds model-ready TTFT, 395 ms median and 432 ms p95 decode
+latency, 2.903 GB peak MLX memory, an 8.4 MB decrease in swap occupancy, and
+6.6 MB of system-wide swap-out. Both runs produced the accepted canonical
+256-token hash, and the five-domain corpus again had exact tokens and zero
+initial-logit error. The earlier repetition increased swap occupancy by 145.6
+MB and throughput varied materially, so budget two remains opt-in rather than
+becoming the default. See
+`experiments/runtime/stage4-prefetch-budget2-2026-09-01.json`.
+
 ### 5.7 Prefill is a separate operating mode
 
 Prefill routes many prompt tokens at once and can touch a much wider union of
@@ -665,6 +679,18 @@ This clears the provisional 2.0 tok/s number for sustained short-context decode,
 but not the complete acceptance gate: context was only 35 prompt tokens, no
 pre-run swap snapshot was captured, and one run does not establish confidence
 intervals or 8K context behavior.
+
+For runs at and after commit `5cf71cf`, record both system-wide swap occupancy
+and cumulative swap-in/swap-out byte deltas. They answer different questions:
+occupancy shows whether the run left more data in swap, while the I/O counters
+show traffic during the window. Both are global macOS counters, not bytes
+attributable solely to vference. A one-token telemetry smoke test measured
+1.43 MB of swap-out with exactly zero occupancy change, so nonzero swap I/O by
+itself is not evidence that the model exceeded its memory budget. The frozen
+acceptance wording "without swap growth" continues to mean no positive
+before/after occupancy delta; swap I/O and available-memory snapshots are
+reported as supporting pressure diagnostics rather than silently replacing
+that gate.
 
 The identical route trace replayed at larger LRU capacities predicted 59.2%
 hits at 1,024 records instead of 28.9% at 320. End-to-end validation preserved
@@ -940,9 +966,11 @@ memory above budget or changing outputs. Keep a no-prefetch baseline in CI.
 useful speculative reads, eviction pollution, and total physical reads. A
 fixed prefill-only table failed to generalize and was rejected. Its causal
 online-adaptive successor cleared a six-trace gate and now has a bounded,
-exact-demand-only live staging implementation. Live A/Bs improved short and 8K
-decode, but the 8K arm missed the absolute throughput gate; the policy remains
-opt-in pending further stall reduction and broader live cases.
+exact-demand-only live staging implementation. A two-record budget cleared the
+absolute 8K throughput threshold in two output-exact runs and passed the
+five-domain exact corpus. It remains opt-in because swap occupancy and
+throughput varied across the two host-state samples; broader live and pressure
+cases remain.
 
 ### Stage 5 — bounded prefill and long contexts
 
@@ -958,6 +986,15 @@ five-domain deterministic corpus pass exactly. Same-context baseline
 performance clears both frozen 10% improvement thresholds. Broader cases such
 as tool calls, schemas, adversarial churn, corruption/failure injection, and
 stochastic sampling remain.
+
+A 256-token prefill-chunk experiment is explicitly rejected even though it
+reduced peak MLX memory from 2.903 GB to 2.553 GB and decoded at 2.471 tok/s.
+Its greedy output first diverged from the accepted 512-chunk token sequence at
+output index 72. A prefetch-disabled 73-token isolation reproduced the same
+candidate prefix and divergence, proving the change follows chunked model
+execution rather than speculative expert publication. Prefill chunk size is
+therefore part of the qualified Qwen execution configuration until the
+chunk-boundary state/numerics issue is fixed and exactness is re-established.
 
 ### Stage 6 — quantization experiments
 
