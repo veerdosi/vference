@@ -85,3 +85,5 @@ tokens with zero initial-logit error. It remains opt-in because throughput and
 system-wide swap occupancy varied between repetitions. Keep the qualified
 prefill chunk at 512: a 256-token chunk changed the output sequence even with
 prefetch disabled and is rejected until chunk-boundary invariance is fixed.
+Non-512 multi-chunk generation therefore requires the explicit experimental
+`--allow-unqualified-prefill-chunk-size` override.

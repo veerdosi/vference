@@ -7,9 +7,10 @@
   },
   "benchmark_commits": [
     "5cf71cf6096ad7b3bd8280edc28b1161388cdea7",
-    "12ac20aabca5546a522f241974ec0359dc6642c3"
+    "12ac20aabca5546a522f241974ec0359dc6642c3",
+    "27cb6b2de650aacfd6087cc61d93d7decb144597"
   ],
-  "benchmark_window_local": "2026-09-01T17:07:00+08:00/2026-09-01T17:49:03+08:00",
+  "benchmark_window_local": "2026-09-01T17:07:00+08:00/2026-09-01T18:19:53+08:00",
   "cache_state": "Each process began with an empty 320-record stable expert cache; experts.pack used F_NOCACHE.",
   "correctness": {
     "accepted_8k_output_token_count": 256,
@@ -75,7 +76,31 @@
       "swap_delta_bytes": 0,
       "swap_out_delta_bytes": 11059200
     },
-    "result": "Rejected. The output change follows prefill chunk size, not prefetch. Chunk size is part of the qualified model-execution configuration until chunk-boundary invariance is fixed and proven."
+    "minimal_reproducer": {
+      "all_initial_argmax_equal": true,
+      "all_initial_logits_exact": false,
+      "all_output_tokens_exact_for_first_16": true,
+      "all_route_expert_sets_exact": false,
+      "all_routes_exact": false,
+      "candidate_chunk_size": 256,
+      "commit": "27cb6b2de650aacfd6087cc61d93d7decb144597",
+      "first_route_rank_difference": {
+        "layer_id": 0,
+        "token_index": 4
+      },
+      "first_route_set_difference": {
+        "candidate_only_expert": 214,
+        "layer_id": 0,
+        "reference_only_expert": 68,
+        "token_index": 6
+      },
+      "initial_logits_max_abs_error": 1.1875,
+      "initial_logits_mean_abs_error": 0.18233796954154968,
+      "prompt_tokens": 512,
+      "reference_chunk_size": 512,
+      "result": "/tmp/vference-chunk-verify-512-routes-v2.json"
+    },
+    "result": "Rejected. The output change follows prefill chunk size, not prefetch. Chunk size is part of the qualified model-execution configuration until chunk-boundary invariance is fixed and proven. Non-512 multi-chunk generation now requires an explicit experimental override."
   },
   "run_summary": {
     "decode_tokens_per_second_max": 2.49491471156584,

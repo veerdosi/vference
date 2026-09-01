@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 
 from vference.runtime.verify import verify_prefill_chunk_invariance
+from vference.runtime.generate import _validate_prefill_chunk_size
 
 
 @pytest.mark.parametrize(
@@ -28,3 +29,14 @@ def test_prefill_chunk_verify_rejects_invalid_workloads(
             chunk_sizes=chunk_sizes,
             continuation_tokens=continuation_tokens,
         )
+
+
+def test_qwen_prefill_chunk_guard_allows_qualified_or_single_chunk() -> None:
+    _validate_prefill_chunk_size(8192, 512, False)
+    _validate_prefill_chunk_size(256, 256, False)
+
+
+def test_qwen_prefill_chunk_guard_requires_explicit_override() -> None:
+    with pytest.raises(ValueError, match="not output-qualified"):
+        _validate_prefill_chunk_size(7936, 256, False)
+    _validate_prefill_chunk_size(7936, 256, True)

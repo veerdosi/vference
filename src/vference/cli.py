@@ -141,6 +141,7 @@ def _stream_generate(args: argparse.Namespace) -> None:
             ),
             prefetch_policy=args.prefetch_policy,
             prefetch_budget=args.prefetch_budget,
+            allow_unqualified_prefill_chunk_size=(args.allow_unqualified_prefill_chunk_size),
         )
     )
 
@@ -250,6 +251,11 @@ def build_parser() -> argparse.ArgumentParser:
     generate_parser.add_argument("--trace-output", type=Path)
     generate_parser.add_argument("--store", choices=("python", "stable"), default="stable")
     generate_parser.add_argument("--prefill-chunk-size", type=int, default=512)
+    generate_parser.add_argument(
+        "--allow-unqualified-prefill-chunk-size",
+        action="store_true",
+        help="allow an experimental multi-chunk Qwen prefill boundary that may change routing/output",
+    )
     generate_parser.add_argument("--repeat-raw-prompt-to-tokens", type=int)
     generate_parser.add_argument(
         "--cache-policy", choices=("global", "layer", "demand"), default="global"

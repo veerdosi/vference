@@ -12,6 +12,23 @@ import psutil
 from .admission import estimate_qwen35_admission
 from .model import load_streaming_qwen
 
+QUALIFIED_QWEN35_PREFILL_CHUNK_SIZE = 512
+
+
+def _validate_prefill_chunk_size(
+    prompt_tokens: int, chunk_size: int, allow_unqualified: bool
+) -> None:
+    if (
+        prompt_tokens > chunk_size
+        and chunk_size != QUALIFIED_QWEN35_PREFILL_CHUNK_SIZE
+        and not allow_unqualified
+    ):
+        raise ValueError(
+            f"multi-chunk Qwen3.5 prefill size {chunk_size} is not output-qualified; "
+            f"use {QUALIFIED_QWEN35_PREFILL_CHUNK_SIZE} or pass the explicit "
+            "experimental override"
+        )
+
 
 def _latency_summary(values: list[float]) -> dict[str, float]:
     ordered = sorted(values)
@@ -66,6 +83,7 @@ def generate_greedy(
     max_mlx_memory_bytes: int | None = None,
     prefetch_policy: str = "none",
     prefetch_budget: int = 1,
+    allow_unqualified_prefill_chunk_size: bool = False,
 ) -> dict[str, object]:
     request_started = time.perf_counter()
     if max_tokens < 1:
@@ -145,6 +163,11 @@ def generate_greedy(
             prompt_tokens = tokenizer.encode(prompt, add_special_tokens=False)
         if not prompt_tokens:
             raise ValueError("prompt encoded to zero tokens")
+        _validate_prefill_chunk_size(
+            len(prompt_tokens),
+            prefill_chunk_size,
+            allow_unqualified_prefill_chunk_size,
+        )
 
         config = json.loads((artifact / "config.json").read_text())
         if max_mlx_memory_bytes is None:

@@ -995,6 +995,16 @@ candidate prefix and divergence, proving the change follows chunked model
 execution rather than speculative expert publication. Prefill chunk size is
 therefore part of the qualified Qwen execution configuration until the
 chunk-boundary state/numerics issue is fixed and exactness is re-established.
+The reusable `prefill-chunk-verify` harness reproduces the underlying numerical
+non-invariance with only 512 prompt tokens: final logits differ by up to 1.1875
+(mean absolute difference 0.1823). Router rank first differs in layer 0 at
+token 4, and top-8 membership first differs in layer 0 at token 6 (expert 68
+versus 214), before any full-attention layer. The first 16 greedy tokens still
+match, demonstrating that token-only smoke checks can miss a router/math
+divergence that becomes user-visible later.
+The generation entry point now rejects a non-512 multi-chunk Qwen prefill by
+default. `--allow-unqualified-prefill-chunk-size` exists only for explicit
+correctness experiments such as the verifier; it is not a performance mode.
 
 ### Stage 6 — quantization experiments
 
