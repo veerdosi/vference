@@ -155,6 +155,7 @@ def _stream_generate(args: argparse.Namespace) -> None:
             prefetch_budget=args.prefetch_budget,
             prefetch_min_observations=args.prefetch_min_observations,
             demand_workers=_resolved_demand_workers(args.store, args.demand_workers),
+            auto_cache_capacity=args.auto_cache_capacity,
             allow_unqualified_prefill_chunk_size=(args.allow_unqualified_prefill_chunk_size),
             temperature=args.temperature,
             top_p=args.top_p,
@@ -307,6 +308,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--demand-workers",
         type=int,
         help="exact-demand read workers (default: 8 for stable, 1 for python)",
+    )
+    generate_parser.add_argument(
+        "--auto-cache-capacity",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="shrink the prefill expert pool when required to admit reserved context state",
     )
     generate_parser.add_argument("--temperature", type=float, default=0.0)
     generate_parser.add_argument("--top-p", type=float, default=1.0)

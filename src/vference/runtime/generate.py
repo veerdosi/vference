@@ -11,7 +11,11 @@ import mlx.core as mx
 import numpy as np
 import psutil
 
-from .admission import estimate_qwen35_admission
+from .admission import (
+    estimate_qwen35_admission,
+    fit_expert_capacity,
+    minimum_expert_capacity,
+)
 from .model import load_streaming_qwen
 from .sampling import make_token_sampler, select_token
 
@@ -188,6 +192,7 @@ def generate_greedy(
     prefetch_budget: int = 1,
     prefetch_min_observations: int = 8,
     demand_workers: int = 1,
+    auto_cache_capacity: bool = True,
     allow_unqualified_prefill_chunk_size: bool = False,
     temperature: float = 0.0,
     top_p: float = 1.0,
@@ -287,6 +292,29 @@ def generate_greedy(
         )
 
         config = json.loads((artifact / "config.json").read_text())
+        text_config = config.get("text_config", config)
+        top_k = int(text_config["num_experts_per_tok"])
+        layer_count = int(text_config["num_hidden_layers"])
+        minimum_prefill_capacity = minimum_expert_capacity(
+            route_width=top_k,
+            layer_count=layer_count,
+            policy=cache_policy,
+        )
+        minimum_decode_capacity = minimum_expert_capacity(
+            route_width=top_k,
+            layer_count=layer_count,
+            policy=effective_decode_cache_policy,
+        )
+        if cache_capacity < minimum_prefill_capacity:
+            raise ValueError(
+                f"{cache_policy} prefill cache needs at least "
+                f"{minimum_prefill_capacity} slots for an exact top-{top_k} route"
+            )
+        if effective_decode_cache_capacity < minimum_decode_capacity:
+            raise ValueError(
+                f"{effective_decode_cache_policy} decode cache needs at least "
+                f"{minimum_decode_capacity} slots for an exact top-{top_k} route"
+            )
         if max_mlx_memory_bytes is None:
             max_mlx_memory_bytes = int(psutil.virtual_memory().total * 0.375)
         runtime_reserve_bytes = (
@@ -300,6 +328,35 @@ def generate_greedy(
             budget_bytes=max_mlx_memory_bytes,
             runtime_reserve_bytes=runtime_reserve_bytes,
         )
+        prefill_capacity_plan: dict[str, int | bool] | None = None
+        actual_prefill_capacity = cache_capacity
+        if not admission.admitted and auto_cache_capacity and store_kind == "stable":
+            capacity_plan = fit_expert_capacity(
+                budget_bytes=max_mlx_memory_bytes,
+                resident_bytes=admission.resident_bytes,
+                current_capacity=cache_capacity,
+                requested_capacity=cache_capacity,
+                minimum_capacity=minimum_prefill_capacity,
+                record_size=int(store.record_size),
+                non_pool_reserve_bytes=(
+                    admission.model_state_bytes
+                    + admission.prefill_transient_reserve_bytes
+                    + admission.runtime_reserve_bytes
+                ),
+            )
+            prefill_capacity_plan = capacity_plan.as_dict()
+            if capacity_plan.admitted:
+                actual_prefill_capacity = capacity_plan.selected_capacity
+                if actual_prefill_capacity != cache_capacity:
+                    store.resize_capacity(actual_prefill_capacity, cache_policy)
+                admission = estimate_qwen35_admission(
+                    config,
+                    resident_bytes=mx.get_active_memory(),
+                    total_tokens=len(prompt_tokens) + max_tokens,
+                    prefill_chunk_size=prefill_chunk_size,
+                    budget_bytes=max_mlx_memory_bytes,
+                    runtime_reserve_bytes=runtime_reserve_bytes,
+                )
         if not admission.admitted:
             raise MemoryError(
                 "context rejected before prefill: estimated MLX peak "
@@ -310,13 +367,13 @@ def generate_greedy(
             resident_bytes=admission.resident_bytes,
             model_state_bytes=admission.model_state_bytes,
             record_size=int(store.record_size),
-            prefill_capacity=cache_capacity,
+            prefill_capacity=actual_prefill_capacity,
             decode_capacity=effective_decode_cache_capacity,
             runtime_reserve_bytes=runtime_reserve_bytes,
             budget_bytes=max_mlx_memory_bytes,
         )
         if (
-            effective_decode_cache_capacity != cache_capacity
+            effective_decode_cache_capacity != actual_prefill_capacity
             and not decode_resize_admission["admitted"]
         ):
             raise MemoryError(
@@ -350,7 +407,7 @@ def generate_greedy(
         prefill_mlx_peak_bytes = mx.get_peak_memory()
 
         transition_started = time.perf_counter()
-        if effective_decode_cache_capacity != cache_capacity:
+        if effective_decode_cache_capacity != actual_prefill_capacity:
             logits = _detach_last_logits(logits)
             gc.collect()
             mx.clear_cache()
@@ -400,7 +457,8 @@ def generate_greedy(
             "store_kind": store_kind,
             "cache_policy": cache_policy,
             "decode_cache_policy": effective_decode_cache_policy,
-            "prefill_cache_capacity": cache_capacity,
+            "prefill_cache_capacity": actual_prefill_capacity,
+            "prefill_capacity_plan": prefill_capacity_plan,
             "decode_cache_capacity": effective_decode_cache_capacity,
             "prefetch_policy": prefetch_policy,
             "prefetch_budget": prefetch_budget,

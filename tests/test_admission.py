@@ -1,4 +1,9 @@
-from vference.runtime.admission import estimate_qwen35_admission, qwen35_state_bytes
+from vference.runtime.admission import (
+    estimate_qwen35_admission,
+    fit_expert_capacity,
+    minimum_expert_capacity,
+    qwen35_state_bytes,
+)
 
 
 CONFIG = {
@@ -59,3 +64,45 @@ def test_admission_rejects_the_measured_unsafe_cache_budget() -> None:
     )
     assert with_prefetch.admitted
     assert not oversized_runtime.admitted
+
+
+def test_capacity_planner_shrinks_only_the_expert_pool() -> None:
+    record_size = 1_769_472
+    current_capacity = 320
+    fixed_resident = 1_378_869_384
+    plan = fit_expert_capacity(
+        budget_bytes=3 * 1024**3,
+        resident_bytes=fixed_resident + current_capacity * record_size,
+        current_capacity=current_capacity,
+        requested_capacity=current_capacity,
+        minimum_capacity=8,
+        record_size=record_size,
+        non_pool_reserve_bytes=399_933_440 + 960 * 1024**2 + 18 * 1024**2,
+    )
+
+    assert plan.admitted
+    assert plan.selected_capacity == 235
+    assert plan.fixed_resident_bytes == fixed_resident
+    assert plan.estimated_peak_bytes <= plan.budget_bytes
+
+
+def test_capacity_planner_rejects_less_than_exact_working_set() -> None:
+    plan = fit_expert_capacity(
+        budget_bytes=100,
+        resident_bytes=80,
+        current_capacity=8,
+        requested_capacity=8,
+        minimum_capacity=8,
+        record_size=10,
+        non_pool_reserve_bytes=21,
+    )
+
+    assert not plan.admitted
+    assert plan.maximum_capacity == 7
+    assert plan.selected_capacity == 0
+
+
+def test_minimum_capacity_accounts_for_layer_partitions() -> None:
+    assert minimum_expert_capacity(route_width=8, layer_count=40, policy="global") == 8
+    assert minimum_expert_capacity(route_width=8, layer_count=40, policy="demand") == 8
+    assert minimum_expert_capacity(route_width=8, layer_count=40, policy="layer") == 320

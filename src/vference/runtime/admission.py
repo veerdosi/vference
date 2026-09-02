@@ -23,6 +23,87 @@ class AdmissionEstimate:
         return asdict(self)
 
 
+@dataclass(frozen=True)
+class ExpertCapacityPlan:
+    admitted: bool
+    budget_bytes: int
+    requested_capacity: int
+    selected_capacity: int
+    maximum_capacity: int
+    minimum_capacity: int
+    current_capacity: int
+    record_size: int
+    fixed_resident_bytes: int
+    non_pool_reserve_bytes: int
+    estimated_peak_bytes: int
+
+    def as_dict(self) -> dict[str, int | bool]:
+        return asdict(self)
+
+
+def fit_expert_capacity(
+    *,
+    budget_bytes: int,
+    resident_bytes: int,
+    current_capacity: int,
+    requested_capacity: int,
+    minimum_capacity: int,
+    record_size: int,
+    non_pool_reserve_bytes: int,
+) -> ExpertCapacityPlan:
+    """Fit a bounded expert pool after reserving model state and transients.
+
+    ``resident_bytes`` includes the currently allocated pool. Subtracting its
+    exact fixed-record payload makes the planner architecture-neutral; the
+    adapter supplies its simultaneous exact working-set minimum.
+    """
+    if budget_bytes < 1 or record_size < 1:
+        raise ValueError("budget and expert record size must be positive")
+    if current_capacity < 1 or requested_capacity < 1 or minimum_capacity < 1:
+        raise ValueError("expert capacities must be positive")
+    if non_pool_reserve_bytes < 0:
+        raise ValueError("non-pool reserve cannot be negative")
+    current_pool_bytes = current_capacity * record_size
+    fixed_resident_bytes = resident_bytes - current_pool_bytes
+    if fixed_resident_bytes < 0:
+        raise ValueError("resident bytes are smaller than the current expert pool")
+    available_pool_bytes = budget_bytes - fixed_resident_bytes - non_pool_reserve_bytes
+    maximum_capacity = max(0, available_pool_bytes // record_size)
+    selected_capacity = min(requested_capacity, maximum_capacity)
+    admitted = selected_capacity >= minimum_capacity
+    if not admitted:
+        selected_capacity = 0
+    estimated_peak_bytes = (
+        fixed_resident_bytes
+        + selected_capacity * record_size
+        + non_pool_reserve_bytes
+    )
+    return ExpertCapacityPlan(
+        admitted=admitted,
+        budget_bytes=budget_bytes,
+        requested_capacity=requested_capacity,
+        selected_capacity=selected_capacity,
+        maximum_capacity=maximum_capacity,
+        minimum_capacity=minimum_capacity,
+        current_capacity=current_capacity,
+        record_size=record_size,
+        fixed_resident_bytes=fixed_resident_bytes,
+        non_pool_reserve_bytes=non_pool_reserve_bytes,
+        estimated_peak_bytes=estimated_peak_bytes,
+    )
+
+
+def minimum_expert_capacity(*, route_width: int, layer_count: int, policy: str) -> int:
+    """Return the slots required for one exact route under a cache partition."""
+    if route_width < 1 or layer_count < 1:
+        raise ValueError("route width and layer count must be positive")
+    if policy in {"global", "demand"}:
+        return route_width
+    if policy == "layer":
+        return route_width * layer_count
+    raise ValueError(f"unknown expert cache policy: {policy}")
+
+
 def qwen35_state_bytes(config: dict[str, object], total_tokens: int) -> int:
     """Derive allocated DeltaNet and KV state bytes for batch-1 BF16 Qwen3.5."""
     text = config.get("text_config", config)
