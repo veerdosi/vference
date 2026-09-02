@@ -943,6 +943,21 @@ and eviction path under one deliberately hostile live trace; it is not a claim
 over every possible route trace. See
 `experiments/runtime/runtime-churn-v1-2026-09-02.json`.
 
+Multi-turn verification now separates expert-store correctness from execution-
+boundary invariance. For a 16-token prefix followed by a 9-token update and 64
+greedy continuation tokens, stable streaming and the Python exact-expert store
+were bit-identical at every full-vocabulary logit step in both split-state and
+one-pass modes. Split-state versus one-pass execution, however, differed at the
+initial logits by up to 0.7109375 (mean 0.1120265) in both stores. Their argmax
+and all 64 continuation tokens remained identical. This attributes the numeric
+difference to the pinned Qwen/MLX execution boundary, not expert streaming, but
+one case is insufficient to qualify general incremental sessions. Incremental
+multi-turn state reuse therefore remains provisional; the conservative
+application behavior is to render the transcript and prefill it using a
+qualified execution shape. The four-path verifier peaked at 2,044,862,410 MLX
+bytes without swap growth. See
+`experiments/runtime/runtime-multiturn-boundary-v1-2026-09-02.json`.
+
 ### 8.3 Runtime release gates
 
 A storage/scheduler change is releasable only if:
@@ -1075,7 +1090,9 @@ five-domain deterministic corpus pass exactly. Same-context baseline
 performance clears both frozen 10% improvement thresholds. Broader cases such
 as tool calls, schemas, corruption/failure injection, and stochastic sampling
 now pass their initial exact-reference corpora, as does a forced minimum-
-capacity live churn trace. Broader live multi-turn state reuse remains.
+capacity live churn trace. The first four-path multi-turn boundary check keeps
+all 64 output tokens but exposes non-exact upstream split-state logits, so
+broader live multi-turn state reuse remains provisional.
 
 A 256-token prefill-chunk experiment is explicitly rejected even though it
 reduced peak MLX memory from 2.903 GB to 2.553 GB and decoded at 2.471 tok/s.

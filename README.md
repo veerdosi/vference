@@ -95,6 +95,13 @@ incurred a 66.9% miss rate and 43.2 GB of demand reads while constantly
 evicting and splitting prefill working sets, yet still matched every reference
 logit and output token without swap growth.
 
+Incremental multi-turn cache reuse is not a qualified default yet. Stable and
+Python expert stores match each other exactly under split-state updates, but
+the pinned Qwen/MLX split execution differs numerically from one-pass prefill
+(0.7109 maximum initial-logit error in the first boundary probe). Its 64 greedy
+tokens still matched; a broader boundary corpus is required before exposing a
+session API that promises invariant outputs.
+
 `--decode-cache-capacity` can replace the stable expert pool at the synchronized
 prefill/decode boundary when a different phase budget is explicitly desired.
 It is not enabled automatically on the 8 GB target. Exact 480- and 560-slot 8K

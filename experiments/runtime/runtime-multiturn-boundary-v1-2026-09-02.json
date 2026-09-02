@@ -1,0 +1,115 @@
+{
+  "artifact": {
+    "expert_pack_sha256": "9b26ebdf13a2863d607e1c3ea6e2528ff0267b7f472f8fd37fd20d3adb497e18",
+    "model_revision": "1e20fd8d42056f870933bf98ca6211024744f7ec",
+    "repository": "mlx-community/Qwen3.5-35B-A3B-4bit"
+  },
+  "benchmark_commit": "7e1c83c",
+  "command": ".venv/bin/vference multi-turn-verify artifacts/qwen3.5-35b-a3b-4bit-runtime --first 'The first segment establishes the code ORCHID-7319. ' --second 'The second segment asks for that code only.' --continuation-tokens 64 --cache-capacity 320",
+  "dependencies": {
+    "mlx": "0.32.2",
+    "mlx_lm": "0.31.3",
+    "nanobind": "2.15.0"
+  },
+  "hardware": {
+    "chip": "Apple M2",
+    "internal_free_bytes_after": 54095699968,
+    "memory_bytes": 8589934592,
+    "model": "Mac14,2",
+    "power": "AC power at post-run snapshot; metadata only",
+    "storage": "Internal APFS /dev/disk3s1s1 container over Apple Fabric",
+    "thermal": "pmset reported no thermal, performance, or CPU power warning after the run"
+  },
+  "operating_system": {
+    "build": "25G83",
+    "version": "macOS 26.6.2"
+  },
+  "recorded_at_local": "2026-09-02T09:06:15+08:00",
+  "configuration": {
+    "cache_capacity": 320,
+    "cache_policy": "global",
+    "continuation_tokens": 64,
+    "execution_paths": [
+      "stable store with 16-token then 9-token state updates",
+      "stable store with one 25-token prefill",
+      "Python exact-expert store with 16-token then 9-token state updates",
+      "Python exact-expert store with one 25-token prefill"
+    ],
+    "filesystem_cache": "Warm buffered reads",
+    "prefetch_policy": "none",
+    "sampler": "greedy"
+  },
+  "workload": {
+    "first_segment_tokens": 16,
+    "second_segment_tokens": 9,
+    "continuation_tokens": 64,
+    "output_token_json_sha256": "711a1f4a58c6b74efd2b080eaa058b23a1064700ffb6d07f0ecfecd2e72a47ed",
+    "output_text": "  The third segment asks for the code again.  The fourth segment asks for the code again.  The fifth segment asks for the code again.  The sixth segment asks for the code again.  The seventh segment asks for the code again.  The eighth segment asks for the code again.  The ninth segment"
+  },
+  "expert_store_correctness": {
+    "one_pass_stable_vs_python": {
+      "all_step_full_vocabulary_logits_bit_exact": true,
+      "continuation_exact": true,
+      "initial_logits_max_abs_error": 0.0,
+      "state_bytes_equal": true
+    },
+    "split_state_stable_vs_python": {
+      "all_step_full_vocabulary_logits_bit_exact": true,
+      "continuation_exact": true,
+      "initial_logits_max_abs_error": 0.0,
+      "state_bytes_equal": true
+    }
+  },
+  "split_state_vs_one_pass": {
+    "same_result_in_both_expert_stores": true,
+    "all_step_logits_exact": false,
+    "continuation_tokens_exact": true,
+    "first_step_logits_difference": 0,
+    "initial_argmax_equal": true,
+    "initial_logits_exact": false,
+    "initial_logits_max_abs_error": 0.7109375,
+    "initial_logits_mean_abs_error": 0.11202651262283325,
+    "state_allocation_bytes_equal": true,
+    "state_allocation_bytes": 69632000,
+    "attribution": "The stable and Python stores produce the identical split/full difference, so expert streaming is not its cause. It is the pinned Qwen/MLX execution-boundary behavior."
+  },
+  "stable_store": {
+    "bytes_read": 67098378240,
+    "execute_seconds": 69.349733804,
+    "hits": 19040,
+    "misses": 37920,
+    "pread_seconds": 46.518637659,
+    "router_and_graph_wait_seconds": 22.449988887
+  },
+  "reference_store": {
+    "bytes_read": 72946483200,
+    "execute_seconds": 73.739909069,
+    "hits": 15735,
+    "materialize_seconds": 5.686322694,
+    "misses": 41225,
+    "pread_seconds": 44.986476326,
+    "router_and_graph_wait_seconds": 22.262124565
+  },
+  "memory": {
+    "mlx_active_bytes_at_result": 1945100426,
+    "mlx_peak_bytes": 2044862410,
+    "process_rss_bytes": {
+      "after_verification": 672415744,
+      "before_load": 94371840,
+      "high_water": 1523056640
+    },
+    "system_swap_bytes": {
+      "after": 2095775744,
+      "before": 2104164352,
+      "delta": -8388608,
+      "swap_in_delta": 99676176384,
+      "swap_out_delta": 6160384
+    }
+  },
+  "decision": {
+    "status": "Expert-store split-state correctness passes; general incremental session reuse remains provisional",
+    "reason": "Both expert-store implementations are bit-exact under the same split-state execution, and both are bit-exact under one-pass execution. Split state and one-pass history produced the same 64 greedy tokens but measurably different logits from step zero. Because the difference is upstream execution-boundary behavior and the corpus has only one boundary case, vference must not claim general output invariance for arbitrary incremental multi-turn reuse yet.",
+    "safe_default": "Do not expose incremental multi-turn state reuse as a qualified default until a broader boundary corpus passes predefined token/state tolerances. Stateless transcript rendering and one-pass prefill remain the conservative application behavior.",
+    "quality_scope": "No vference storage/cache behavior changed logits. The remaining question is whether the pinned Qwen/MLX segmented-state numerics preserve outputs broadly enough for a session API."
+  }
+}
