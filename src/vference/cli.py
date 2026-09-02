@@ -25,6 +25,12 @@ def _repo_root() -> Path:
     return Path(__file__).resolve().parents[2]
 
 
+def _resolved_demand_workers(store: str, requested: int | None) -> int:
+    if requested is not None:
+        return requested
+    return 8 if store == "stable" else 1
+
+
 def _artifact_inspect(args: argparse.Namespace) -> None:
     model_dir = args.model.resolve()
     entries = scan_model(model_dir)
@@ -148,7 +154,7 @@ def _stream_generate(args: argparse.Namespace) -> None:
             prefetch_policy=args.prefetch_policy,
             prefetch_budget=args.prefetch_budget,
             prefetch_min_observations=args.prefetch_min_observations,
-            demand_workers=args.demand_workers,
+            demand_workers=_resolved_demand_workers(args.store, args.demand_workers),
             allow_unqualified_prefill_chunk_size=(args.allow_unqualified_prefill_chunk_size),
             temperature=args.temperature,
             top_p=args.top_p,
@@ -297,7 +303,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     generate_parser.add_argument("--prefetch-budget", type=int, default=1)
     generate_parser.add_argument("--prefetch-min-observations", type=int, default=8)
-    generate_parser.add_argument("--demand-workers", type=int, default=1)
+    generate_parser.add_argument(
+        "--demand-workers",
+        type=int,
+        help="exact-demand read workers (default: 8 for stable, 1 for python)",
+    )
     generate_parser.add_argument("--temperature", type=float, default=0.0)
     generate_parser.add_argument("--top-p", type=float, default=1.0)
     generate_parser.add_argument("--top-k", type=int, default=0)

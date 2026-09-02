@@ -1154,6 +1154,9 @@ At about 1.65 GB/s, live demand reads now reach the independent queue-depth-
 eight storage measurement. The next storage optimization must reduce or
 reorganize physical traffic, improve useful overlap, or change the active
 artifact layout; repeating the same demand-queue run cannot raise that ceiling.
+The command-line stable store consequently defaults to eight demand workers;
+the Python correctness reference remains serial, and the library API keeps an
+explicit worker argument for controlled experiments.
 
 Phase-specific pool replacement was implemented to test whether decode could
 spend memory released after bounded prefill. The first implementation was

@@ -78,6 +78,8 @@ On the qualified 8K workload it preserved the canonical 256-token output,
 decoded at 2.523 tok/s, and grew no swap. Full-logit application and forced-
 churn comparisons also remained exact. Eight workers reached about 1.65 GB/s,
 the measured queue-depth-eight ceiling of the internal artifact path.
+The CLI therefore defaults the stable store to eight demand workers; use
+`--demand-workers 1` only when deliberately reproducing the serial baseline.
 
 Runtime artifacts are checked automatically before model load. The first use
 hashes every manifest-listed payload and support file; later runs use a
