@@ -1,0 +1,19 @@
+{
+  "format": "vference.runtime-corpus.v1",
+  "cases": [
+    {
+      "id": "forced_global_churn",
+      "messages": [
+        {
+          "role": "system",
+          "content": "Answer concisely and preserve every requested symbol exactly."
+        },
+        {
+          "role": "user",
+          "content": "Summarize this deliberately heterogeneous sequence in one sentence: Python def lambda async await; 日本語の文章; العربية; emoji 🧠🚀; JSON {\"alpha\":[1,2,3],\"ok\":true}; algebra x^2+y^2=z^2; cache cache cache; ORCHID-7319."
+        }
+      ],
+      "max_tokens": 16
+    }
+  ]
+}
