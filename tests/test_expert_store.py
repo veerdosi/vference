@@ -363,3 +363,26 @@ def test_adaptive_prefetch_stages_only_then_publishes_exact_demand(
         fallback_slots = [int(slots[0, 0, index]) for index in range(2)]
         copied = [int(np.asarray(store._pools[suffixes[0]])[slot, 0]) for slot in fallback_slots]
         assert copied == [40, 50]
+
+    class DelayedPrefetch:
+        def done(self) -> bool:
+            return False
+
+        def result(self) -> bytes:
+            return records[4]
+
+    with StableSlotExpertStore(tmp_path, capacity=4, cache_policy="layer") as store:
+        store._pending_prefetch[(1, 1)] = DelayedPrefetch()  # type: ignore[assignment]
+        slots = store._resolve_slots(1, second)
+        stats = store.stats()
+        assert stats["prefetch"]["useful"] == 1
+        assert stats["prefetch"]["late"] == 1
+        assert stats["bytes_read"] == store.record_size
+        resolved_slots = [int(slots[0, 0, index]) for index in range(2)]
+        copied = [int(np.asarray(store._pools[suffixes[0]])[slot, 0]) for slot in resolved_slots]
+        assert copied == [40, 50]
+
+    with StableSlotExpertStore(tmp_path, capacity=2, cache_policy="layer") as store:
+        with pytest.raises(RuntimeError, match="simultaneously requested working set"):
+            store._resolve_slots(1, second)
+        assert store.stats()["bytes_read"] == 0

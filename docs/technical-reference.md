@@ -886,12 +886,35 @@ prefill plus 256-token decode run achieved only 1.824 tok/s and grew swap by
 microbenchmark had predicted 33.68 GiB/s checksum throughput, but that result
 did not capture MLX/unified-memory pipeline effects or the host-state drift
 seen in contemporaneous A/B runs. The runtime therefore continues to rely on
-the complete pack SHA-256 checked while constructing/verifying the immutable
-active artifact; it does not checksum records in the token-critical path.
-Future integrity work must run asynchronously or otherwise demonstrate the
-full sustained gates before adoption. Measurements and the rejected variants
-are recorded in
+the complete pack SHA-256 rather than checksumming records in the
+token-critical path. Measurements and the rejected variants are recorded in
 `experiments/runtime/rejected-crc-on-load-2026-09-01.json`.
+
+Artifact admission is now automatic. Before model load, the runtime verifies
+all 13 payload and support-file digests from `manifest.json`. A local stamp
+binds those expected digests and the manifest digest to each file's device,
+inode, size, modification time, and change time. Matching identities make
+subsequent admission an O(file-count) metadata check; a missing or stale stamp
+forces a complete SHA-256 pass. On the internal SSD, the first pass hashed
+19,525,390,970 bytes in 14.649 seconds (1.241 GiB/s), while two immediately
+cached checks took 0.265 and 0.125 ms. A real generation process reported a
+0.319 ms cached check. The expert-pack identity is also checked after each
+prefill chunk and before publishing every output token, so replacement during
+a session fails closed. This avoids the CRC path's per-record CPU and unified-
+memory cost.
+
+Injected same-size corruption caused an explicit digest mismatch; a truncated
+native record caused an explicit short-read error; a speculative `pread`
+failure fell back to synchronous reads of the exact requested experts; and a
+late prefetch waited for the exact record without substitution. A real 1.90
+GiB budget request was rejected before prefill because the estimated peak was
+2.81 GiB. The integrated 19.5 GB artifact check reproduced the known eight
+output tokens with a 2,035,799,906-byte MLX peak and zero swap growth. The
+manifest and stamp are local, unsigned metadata: this protects against
+accidental corruption and ordinary replacement, not an attacker who can
+rewrite the artifact, manifest, and stamp together. Full measurements and
+commands are in
+`experiments/runtime/runtime-failure-injection-v1-2026-09-02.json`.
 
 ### 8.3 Runtime release gates
 

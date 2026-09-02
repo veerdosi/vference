@@ -67,7 +67,22 @@ measured memory model before prefill. Stable slots also match the Python
 exact-expert reference with zero logit error on the first split-state and
 five-domain deterministic corpus. Against an exact forced-demand 8K baseline,
 it improves throughput 17.6% and reduces exposed expert time 15.7%. It is not
-yet a release claim; broader long-context and failure-injection cases remain.
+yet a release claim; broader long-context and application-surface cases remain.
+
+Runtime artifacts are checked automatically before model load. The first use
+hashes every manifest-listed payload and support file; later runs use a
+file-identity-bound stamp and rehash automatically if anything changed. To
+explicitly rehash the active artifact:
+
+```sh
+uv run vference artifact-integrity \
+  artifacts/qwen3.5-35b-a3b-4bit-runtime --force
+```
+
+The initial failure-injection gate covers corruption, short reads, late and
+failed speculative reads, insufficient exact working-set capacity, and unsafe
+memory admission. All fail explicitly or fall back to the exact requested
+expert; none can silently alter model math.
 
 `--decode-cache-capacity` can replace the stable expert pool at the synchronized
 prefill/decode boundary when a different phase budget is explicitly desired.

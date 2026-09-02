@@ -1,0 +1,138 @@
+{
+  "artifact": {
+    "expert_pack_bytes": 18119393280,
+    "expert_pack_sha256": "9b26ebdf13a2863d607e1c3ea6e2528ff0267b7f472f8fd37fd20d3adb497e18",
+    "integrity_file_count": 13,
+    "integrity_payload_bytes": 19525390970,
+    "manifest_sha256": "06c2754d72e6a77ce5984d19ea0f27bcad17f866695cdaec1bd9c5edfd2fd1d1",
+    "model_revision": "1e20fd8d42056f870933bf98ca6211024744f7ec",
+    "path": "/Users/veerdosi/Documents/code/github/vference/artifacts/qwen3.5-35b-a3b-4bit-runtime",
+    "repository": "mlx-community/Qwen3.5-35B-A3B-4bit"
+  },
+  "benchmark_commit": "62872e9",
+  "dependencies": {
+    "mlx": "0.32.2",
+    "mlx_lm": "0.31.3",
+    "nanobind": "2.15.0"
+  },
+  "hardware": {
+    "architecture": "arm64",
+    "chip": "Apple M2",
+    "internal_free_bytes_after": 55148036096,
+    "memory_bytes": 8589934592,
+    "model": "Mac14,2",
+    "storage": "Internal APFS /dev/disk3s1s1 container over Apple Fabric"
+  },
+  "operating_system": {
+    "build": "25G83",
+    "version": "macOS 26.6.2"
+  },
+  "recorded_at_local": "2026-09-02T08:40:02+08:00",
+  "integrity_admission": {
+    "command": ".venv/bin/vference artifact-integrity artifacts/qwen3.5-35b-a3b-4bit-runtime --force",
+    "forced_full_hash": {
+      "bytes_hashed": 19525390970,
+      "cached": false,
+      "elapsed_seconds": 14.648576958978083,
+      "effective_bytes_per_second": 1332920666.9479883,
+      "effective_gib_per_second": 1.2413791073001812,
+      "file_count": 13,
+      "stamp_written": true,
+      "verified": true
+    },
+    "cached_checks": [
+      {
+        "bytes_hashed": 0,
+        "elapsed_seconds": 0.00026474997866898775,
+        "verified": true
+      },
+      {
+        "bytes_hashed": 0,
+        "elapsed_seconds": 0.0001252919901162386,
+        "verified": true
+      }
+    ],
+    "policy": "All manifest-listed runtime payload and support files are SHA-256 verified before first use. A stamp binds the manifest digest, expected digests, and device/inode/size/mtime/ctime identities. Unchanged identities take the cached path; any stale or missing stamp causes a complete rehash. The experts.pack identity is checked after every prefill chunk and before each output token is published.",
+    "threat_model_limit": "The local manifest and stamp are not signed. This detects accidental corruption and ordinary file replacement; it is not an authenticity mechanism against an attacker able to rewrite the artifact, manifest, and stamp together. --force always rehashes payloads against the current manifest."
+  },
+  "real_runtime_guard": {
+    "cache_state": "Artifact integrity stamp warm; expert reads used F_NOCACHE and a fresh process/cache.",
+    "configuration": {
+      "cache_capacity": 320,
+      "cache_policy": "global",
+      "clear_cache_between_prefill_chunks": true,
+      "decode_cache_policy": "layer",
+      "max_tokens": 8,
+      "prefetch_policy": "none",
+      "prefill_chunk_size": 512,
+      "store": "stable"
+    },
+    "prompt": "Resize must preserve exact inference.",
+    "prompt_tokens": 18,
+    "output_tokens": [15771, 49942, 13, 5044, 3300, 279, 2099, 11],
+    "output_text": "Understood. Please provide the image,",
+    "matches_recorded_exact_tokens": true,
+    "artifact_integrity_cached_seconds": 0.0003190000425092876,
+    "load_seconds": 2.0208076249691658,
+    "cold_start_time_to_first_token_seconds": 6.422467083961237,
+    "decode_tokens_per_second": 1.9522123287474205,
+    "mlx_peak_bytes": 2035799906,
+    "process_high_water_rss_bytes": 1428848640,
+    "swap_delta_bytes": 0,
+    "expert_demand_bytes": 6826622976,
+    "expert_pread_seconds": 4.938646267
+  },
+  "failure_injection": {
+    "test_command": ".venv/bin/pytest -q tests/test_expert_store.py tests/test_integrity.py tests/test_admission.py",
+    "focused_test_result": "6 passed",
+    "cases": [
+      {
+        "case": "same-size experts.pack bit flip after a valid stamp",
+        "expected": "stale identity forces a full hash and SHA-256 mismatch raises before model load",
+        "passed": true
+      },
+      {
+        "case": "experts.pack identity changes after runtime admission",
+        "expected": "generation guard raises before another token is published",
+        "passed": true
+      },
+      {
+        "case": "truncated native expert record",
+        "expected": "short preadv raises explicitly rather than copying or executing a partial expert",
+        "passed": true
+      },
+      {
+        "case": "speculative prefetch pread raises OSError",
+        "expected": "discard speculative result, synchronously demand-read both exact requested experts, and reproduce bytes [40, 50]",
+        "passed": true
+      },
+      {
+        "case": "requested prefetch reports not ready",
+        "expected": "wait for that exact record, count it late, then publish only on demand; the companion expert is synchronously read and bytes remain [40, 50]",
+        "passed": true
+      },
+      {
+        "case": "layer cache smaller than simultaneous exact working set",
+        "expected": "raise before any expert bytes are read",
+        "passed": true
+      }
+    ]
+  },
+  "real_memory_rejection": {
+    "configuration": {
+      "cache_capacity": 320,
+      "max_mlx_memory_gib": 1.9,
+      "prefill_chunk_size": 512,
+      "total_tokens": 26
+    },
+    "exit_code": 1,
+    "error": "MemoryError: context rejected before prefill: estimated MLX peak 2.81 GiB exceeds the 1.90 GiB budget",
+    "inference_started": false,
+    "passed": true
+  },
+  "decision": {
+    "status": "Initial fail-closed runtime reliability gate passed",
+    "reason": "The real artifact now has automatic whole-artifact admission without token-critical-path checksums. Corruption and in-session replacement stop output; short reads and insufficient capacity raise; failed speculation falls back to the exact demand read; unsafe MLX memory requests are rejected before prefill. The integrated real-artifact guard reproduced the known exact token sequence without swap growth.",
+    "quality_scope": "These checks show that failure handling cannot silently substitute, skip, remap, truncate, or execute the wrong expert. They do not compare the pinned 4-bit checkpoint with BF16 and do not claim adversarial artifact authenticity."
+  }
+}
