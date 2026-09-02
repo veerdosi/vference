@@ -135,9 +135,13 @@ def verify_multi_turn_state(
     continuation_tokens: int = 8,
     cache_capacity: int = 320,
 ) -> dict[str, object]:
-    """Compare stable and Python stores under identical split-prefix updates."""
+    """Compare expert stores and split-state reuse against one-pass history."""
     if continuation_tokens < 1:
         raise ValueError("continuation token count must be positive")
+    process = psutil.Process()
+    rss_before = process.memory_info().rss
+    swap_before = psutil.swap_memory()
+    mx.reset_peak_memory()
     model, tokenizer, stable_store = load_streaming_qwen(
         artifact,
         cache_capacity=cache_capacity,
@@ -151,49 +155,110 @@ def verify_multi_turn_state(
         if not first_tokens or not second_tokens:
             raise ValueError("both multi-turn segments must encode to tokens")
 
-        def run_split() -> tuple[np.ndarray, list[int], int]:
+        def run(
+            segmented: bool,
+        ) -> tuple[np.ndarray, list[int], list[str], int]:
             cache = model.make_cache()
-            logits = model(mx.array([first_tokens]), cache=cache)
-            mx.eval(logits)
-            logits = model(mx.array([second_tokens]), cache=cache)[:, -1:]
+            if segmented:
+                logits = model(mx.array([first_tokens]), cache=cache)
+                mx.eval(logits)
+                logits = model(mx.array([second_tokens]), cache=cache)[:, -1:]
+            else:
+                logits = model(mx.array([first_tokens + second_tokens]), cache=cache)[:, -1:]
             mx.eval(logits)
             initial = np.asarray(logits.astype(mx.float32)).copy()
             output: list[int] = []
+            step_logits_sha256: list[str] = []
             for _ in range(continuation_tokens):
+                logit_bytes = np.asarray(logits[:, -1:].view(mx.uint16)).tobytes()
+                step_logits_sha256.append(hashlib.sha256(logit_bytes).hexdigest())
                 token = int(mx.argmax(logits[0, -1]).item())
                 output.append(token)
                 logits = model(mx.array([[token]]), cache=cache)
                 mx.eval(logits)
-            return initial, output, _cache_bytes(cache)
+            return initial, output, step_logits_sha256, _cache_bytes(cache)
 
-        stable_logits, stable_output, stable_state_bytes = run_split()
+        stable_split = run(segmented=True)
+        stable_full = run(segmented=False)
         stable_stats = stable_store.stats()
         stable_store.close()
 
         reference_store = SynchronousExpertStore(artifact, capacity=cache_capacity)
         for layer_id, layer in enumerate(model.language_model.layers):
             layer.mlp.switch_mlp = StreamingSwitchGLU(layer_id, reference_store)
-        reference_logits, reference_output, reference_state_bytes = run_split()
+        reference_split = run(segmented=True)
+        reference_full = run(segmented=False)
 
-        initial_delta = np.abs(stable_logits - reference_logits)
-        initial_tokens_equal = int(stable_logits.argmax()) == int(reference_logits.argmax())
+        def compare(
+            left: tuple[np.ndarray, list[int], list[str], int],
+            right: tuple[np.ndarray, list[int], list[str], int],
+        ) -> dict[str, object]:
+            delta = np.abs(left[0] - right[0])
+            first_step_difference = next(
+                (
+                    index
+                    for index, (left_hash, right_hash) in enumerate(zip(left[2], right[2]))
+                    if left_hash != right_hash
+                ),
+                None,
+            )
+            return {
+                "initial_argmax_equal": int(left[0].argmax()) == int(right[0].argmax()),
+                "initial_logits_exact": bool(np.array_equal(left[0], right[0])),
+                "initial_logits_max_abs_error": float(delta.max()),
+                "initial_logits_mean_abs_error": float(delta.mean()),
+                "all_step_logits_exact": first_step_difference is None,
+                "first_step_logits_difference": first_step_difference,
+                "continuation_exact": left[1] == right[1],
+                "state_bytes_equal": left[3] == right[3],
+            }
+
+        split_store_comparison = compare(stable_split, reference_split)
+        full_store_comparison = compare(stable_full, reference_full)
+        stable_boundary_comparison = compare(stable_split, stable_full)
+        reference_boundary_comparison = compare(reference_split, reference_full)
+        swap_after = psutil.swap_memory()
 
         return {
             "artifact": str(artifact.resolve()),
             "first_tokens": len(first_tokens),
             "second_tokens": len(second_tokens),
             "continuation_tokens": continuation_tokens,
-            "initial_argmax_equal": initial_tokens_equal,
-            "initial_logits_max_abs_error": float(initial_delta.max()),
-            "initial_logits_mean_abs_error": float(initial_delta.mean()),
-            "continuation_exact": stable_output == reference_output,
-            "stable_output_tokens": stable_output,
-            "reference_output_tokens": reference_output,
-            "output_text": tokenizer.decode(stable_output),
-            "stable_state_bytes": stable_state_bytes,
-            "reference_state_bytes": reference_state_bytes,
+            "initial_argmax_equal": split_store_comparison["initial_argmax_equal"],
+            "initial_logits_max_abs_error": split_store_comparison[
+                "initial_logits_max_abs_error"
+            ],
+            "initial_logits_mean_abs_error": split_store_comparison[
+                "initial_logits_mean_abs_error"
+            ],
+            "continuation_exact": split_store_comparison["continuation_exact"],
+            "stable_output_tokens": stable_split[1],
+            "reference_output_tokens": reference_split[1],
+            "output_text": tokenizer.decode(stable_split[1]),
+            "stable_state_bytes": stable_split[3],
+            "reference_state_bytes": reference_split[3],
+            "split_store_comparison": split_store_comparison,
+            "full_store_comparison": full_store_comparison,
+            "stable_split_vs_full": stable_boundary_comparison,
+            "reference_split_vs_full": reference_boundary_comparison,
+            "stable_full_output_tokens": stable_full[1],
+            "reference_full_output_tokens": reference_full[1],
             "stable_store": stable_stats,
             "reference_store": reference_store.stats(),
+            "mlx_active_bytes": mx.get_active_memory(),
+            "mlx_peak_bytes": mx.get_peak_memory(),
+            "process_rss_bytes": {
+                "before_load": rss_before,
+                "after_verification": process.memory_info().rss,
+                "high_water": resource.getrusage(resource.RUSAGE_SELF).ru_maxrss,
+            },
+            "system_swap_bytes": {
+                "before": swap_before.used,
+                "after": swap_after.used,
+                "delta": swap_after.used - swap_before.used,
+                "swap_in_delta": swap_after.sin - swap_before.sin,
+                "swap_out_delta": swap_after.sout - swap_before.sout,
+            },
         }
     finally:
         stable_store.close()
