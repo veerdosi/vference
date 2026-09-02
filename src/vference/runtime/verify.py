@@ -168,6 +168,7 @@ def verify_multi_turn_state(
 
         stable_logits, stable_output, stable_state_bytes = run_split()
         stable_stats = stable_store.stats()
+        stable_store.close()
 
         reference_store = SynchronousExpertStore(artifact, capacity=cache_capacity)
         for layer_id, layer in enumerate(model.language_model.layers):
@@ -202,6 +203,32 @@ def verify_multi_turn_state(
 
 def _cache_bytes(cache: list[object]) -> int:
     return sum(int(getattr(item, "nbytes", 0)) for item in cache)
+
+
+def _corpus_prompt_tokens(tokenizer: object, case: dict[str, object]) -> list[int]:
+    raw_messages = case.get("messages")
+    if raw_messages is None:
+        if "prompt" not in case:
+            raise ValueError(f"case {case.get('id')} requires prompt or messages")
+        messages = [{"role": "user", "content": str(case["prompt"])}]
+    else:
+        if not isinstance(raw_messages, list) or not raw_messages:
+            raise ValueError(f"case {case.get('id')} messages must be a non-empty list")
+        messages = raw_messages
+    template_kwargs: dict[str, object] = {
+        "add_generation_prompt": True,
+        "tokenize": True,
+        "enable_thinking": bool(case.get("enable_thinking", False)),
+    }
+    tools = case.get("tools")
+    if tools is not None:
+        if not isinstance(tools, list) or not tools:
+            raise ValueError(f"case {case.get('id')} tools must be a non-empty list")
+        template_kwargs["tools"] = tools
+    prompt_tokens = tokenizer.apply_chat_template(messages, **template_kwargs)
+    if not isinstance(prompt_tokens, list) or not prompt_tokens:
+        raise ValueError(f"case {case.get('id')} chat template produced no tokens")
+    return prompt_tokens
 
 
 def verify_prefill_chunk_invariance(
@@ -417,12 +444,7 @@ def verify_runtime_corpus(
     try:
 
         def run_case(case: dict[str, object]) -> dict[str, object]:
-            prompt_tokens = tokenizer.apply_chat_template(
-                [{"role": "user", "content": str(case["prompt"])}],
-                add_generation_prompt=True,
-                tokenize=True,
-                enable_thinking=False,
-            )
+            prompt_tokens = _corpus_prompt_tokens(tokenizer, case)
             cache = model.make_cache()
             logits = model(mx.array([prompt_tokens]), cache=cache)[:, -1:]
             mx.eval(logits)
@@ -455,6 +477,7 @@ def verify_runtime_corpus(
                 mx.eval(logits)
             return {
                 "initial_logits": initial,
+                "prompt_tokens": len(prompt_tokens),
                 "output_tokens": output,
                 "output_text": tokenizer.decode(output),
                 "step_logits_sha256": step_logits_sha256,
@@ -469,6 +492,7 @@ def verify_runtime_corpus(
 
         stable_results = [run_case(case) for case in cases]
         stable_stats = stable_store.stats()
+        stable_store.close()
 
         reference_store = SynchronousExpertStore(artifact, capacity=cache_capacity)
         for layer_id, layer in enumerate(model.language_model.layers):
@@ -499,6 +523,7 @@ def verify_runtime_corpus(
             results.append(
                 {
                     "id": case["id"],
+                    "prompt_tokens": stable["prompt_tokens"],
                     "initial_logits_max_abs_error": float(delta.max()),
                     "initial_logits_mean_abs_error": float(delta.mean()),
                     "step_logits_exact": first_step_logits_difference is None,

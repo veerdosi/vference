@@ -4,7 +4,6 @@ import mlx.core as mx
 import numpy as np
 import pytest
 
-from vference.runtime.verify import verify_prefill_chunk_invariance
 from vference.runtime.generate import (
     _detach_last_logits,
     _decode_resize_admission,
@@ -12,6 +11,49 @@ from vference.runtime.generate import (
     _validate_prefill_chunk_size,
 )
 from vference.runtime.sampling import make_token_sampler, select_token
+from vference.runtime.verify import _corpus_prompt_tokens, verify_prefill_chunk_invariance
+
+
+def test_corpus_prompt_supports_transcripts_and_tools() -> None:
+    class Tokenizer:
+        def __init__(self) -> None:
+            self.calls: list[tuple[object, dict[str, object]]] = []
+
+        def apply_chat_template(self, messages: object, **kwargs: object) -> list[int]:
+            self.calls.append((messages, kwargs))
+            return [1, 2, 3]
+
+    tokenizer = Tokenizer()
+    messages = [
+        {"role": "system", "content": "Be exact."},
+        {"role": "user", "content": "Call the tool."},
+    ]
+    tools = [{"type": "function", "function": {"name": "lookup"}}]
+    assert _corpus_prompt_tokens(
+        tokenizer,
+        {
+            "id": "tool",
+            "messages": messages,
+            "tools": tools,
+            "enable_thinking": True,
+        },
+    ) == [1, 2, 3]
+    assert tokenizer.calls == [
+        (
+            messages,
+            {
+                "add_generation_prompt": True,
+                "tokenize": True,
+                "enable_thinking": True,
+                "tools": tools,
+            },
+        )
+    ]
+
+
+def test_corpus_prompt_rejects_missing_input() -> None:
+    with pytest.raises(ValueError, match="requires prompt or messages"):
+        _corpus_prompt_tokens(object(), {"id": "missing"})
 
 
 def test_greedy_and_seeded_sampling_are_reproducible() -> None:

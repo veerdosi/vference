@@ -1,0 +1,85 @@
+{
+  "format": "vference.runtime-corpus.v1",
+  "cases": [
+    {
+      "id": "very_short",
+      "prompt": "Hi.",
+      "max_tokens": 8
+    },
+    {
+      "id": "repeated_tokens",
+      "prompt": "Read this repeated sequence, then reply with exactly DONE: cache cache cache cache cache cache cache cache cache cache cache cache cache cache cache cache cache cache cache cache cache cache cache cache cache cache cache cache cache cache cache cache.",
+      "max_tokens": 8
+    },
+    {
+      "id": "multi_turn_transcript",
+      "messages": [
+        {
+          "role": "system",
+          "content": "Follow the user's output constraint exactly."
+        },
+        {
+          "role": "user",
+          "content": "Remember the code ORCHID-7319."
+        },
+        {
+          "role": "assistant",
+          "content": "I will remember ORCHID-7319."
+        },
+        {
+          "role": "user",
+          "content": "Return only the remembered code."
+        }
+      ],
+      "max_tokens": 12
+    },
+    {
+      "id": "tool_declaration",
+      "messages": [
+        {
+          "role": "user",
+          "content": "What is the current weather in Singapore? Use the available tool."
+        }
+      ],
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "get_weather",
+            "description": "Get the current weather for a city.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "city": {
+                  "type": "string",
+                  "description": "City name"
+                },
+                "units": {
+                  "type": "string",
+                  "enum": ["celsius", "fahrenheit"]
+                }
+              },
+              "required": ["city"],
+              "additionalProperties": false
+            }
+          }
+        }
+      ],
+      "max_tokens": 24
+    },
+    {
+      "id": "nested_json_schema",
+      "messages": [
+        {
+          "role": "system",
+          "content": "Return only JSON that satisfies the requested schema."
+        },
+        {
+          "role": "user",
+          "content": "Return an object with service='vference', healthy=true, and metrics containing integer queue_depth=0 and number tokens_per_second=2.0. Do not add keys."
+        }
+      ],
+      "max_tokens": 32
+    }
+  ]
+}
