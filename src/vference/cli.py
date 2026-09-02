@@ -148,6 +148,7 @@ def _stream_generate(args: argparse.Namespace) -> None:
             prefetch_policy=args.prefetch_policy,
             prefetch_budget=args.prefetch_budget,
             prefetch_min_observations=args.prefetch_min_observations,
+            demand_workers=args.demand_workers,
             allow_unqualified_prefill_chunk_size=(args.allow_unqualified_prefill_chunk_size),
             temperature=args.temperature,
             top_p=args.top_p,
@@ -178,6 +179,7 @@ def _corpus_verify(args: argparse.Namespace) -> None:
         prefetch_policy=args.prefetch_policy,
         prefetch_budget=args.prefetch_budget,
         prefetch_min_observations=args.prefetch_min_observations,
+        demand_workers=args.demand_workers,
     )
     print_json(result)
     if not result["all_tokens_exact"] or not result["all_step_logits_exact"]:
@@ -295,6 +297,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     generate_parser.add_argument("--prefetch-budget", type=int, default=1)
     generate_parser.add_argument("--prefetch-min-observations", type=int, default=8)
+    generate_parser.add_argument("--demand-workers", type=int, default=1)
     generate_parser.add_argument("--temperature", type=float, default=0.0)
     generate_parser.add_argument("--top-p", type=float, default=1.0)
     generate_parser.add_argument("--top-k", type=int, default=0)
@@ -320,6 +323,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     corpus_parser.add_argument("--prefetch-budget", type=int, default=1)
     corpus_parser.add_argument("--prefetch-min-observations", type=int, default=8)
+    corpus_parser.add_argument("--demand-workers", type=int, default=1)
     corpus_parser.set_defaults(func=_corpus_verify)
 
     chunk_parser = commands.add_parser("prefill-chunk-verify")

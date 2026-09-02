@@ -187,6 +187,7 @@ def generate_greedy(
     prefetch_policy: str = "none",
     prefetch_budget: int = 1,
     prefetch_min_observations: int = 8,
+    demand_workers: int = 1,
     allow_unqualified_prefill_chunk_size: bool = False,
     temperature: float = 0.0,
     top_p: float = 1.0,
@@ -230,6 +231,7 @@ def generate_greedy(
         prefetch_policy=prefetch_policy,
         prefetch_budget=prefetch_budget,
         prefetch_min_observations=prefetch_min_observations,
+        demand_workers=demand_workers,
     )
     load_seconds = time.perf_counter() - load_started
     model_ready_at = time.perf_counter()

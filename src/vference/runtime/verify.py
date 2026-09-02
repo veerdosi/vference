@@ -483,6 +483,7 @@ def verify_runtime_corpus(
     prefetch_policy: str = "none",
     prefetch_budget: int = 1,
     prefetch_min_observations: int = 8,
+    demand_workers: int = 1,
 ) -> dict[str, object]:
     """Compare deterministic chat cases between stable and Python stores."""
     corpus = json.loads(corpus_path.read_text())
@@ -504,6 +505,7 @@ def verify_runtime_corpus(
         prefetch_policy=prefetch_policy,
         prefetch_budget=prefetch_budget,
         prefetch_min_observations=prefetch_min_observations,
+        demand_workers=demand_workers,
     )
     reference_store = None
     try:
@@ -608,6 +610,7 @@ def verify_runtime_corpus(
             "prefetch_policy": prefetch_policy,
             "prefetch_budget": prefetch_budget,
             "prefetch_min_observations": prefetch_min_observations,
+            "demand_workers": demand_workers,
             "all_tokens_exact": all(result["tokens_exact"] for result in results),
             "all_step_logits_exact": all(result["step_logits_exact"] for result in results),
             "max_initial_logits_abs_error": max(

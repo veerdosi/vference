@@ -168,5 +168,6 @@ NB_MODULE(_vference_native, module) {
           "pools"_a,
           "slot"_a,
           "file_offset"_a,
-          "segment_bytes"_a);
+          "segment_bytes"_a,
+          nb::call_guard<nb::gil_scoped_release>());
 }

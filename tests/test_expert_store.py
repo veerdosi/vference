@@ -230,6 +230,11 @@ def test_stable_slots_match_math_and_keep_addresses(tmp_path: Path) -> None:
         expected_batch = reference.execute(0, batch_x, batch_indices)
         mx.eval(expected_first, expected_second, expected_batch)
 
+    with StableSlotExpertStore(tmp_path, capacity=2, demand_workers=2) as parallel:
+        parallel_second = parallel.execute(0, x, mx.array([[[2, 0]]], dtype=mx.int32))
+        mx.eval(parallel_second)
+        assert parallel.stats()["demand_workers"] == 2
+
     assert np.array_equal(
         np.asarray(first.view(mx.uint16)), np.asarray(expected_first.view(mx.uint16))
     )
@@ -256,10 +261,14 @@ def test_stable_slots_match_math_and_keep_addresses(tmp_path: Path) -> None:
         np.asarray(after_resize.view(mx.uint16)),
         np.asarray(expected_first.view(mx.uint16)),
     )
+    assert np.array_equal(
+        np.asarray(parallel_second.view(mx.uint16)),
+        np.asarray(expected_second.view(mx.uint16)),
+    )
 
     pack_path = tmp_path / "experts.pack"
     pack_path.write_bytes(pack_path.read_bytes()[:-1])
-    with StableSlotExpertStore(tmp_path, capacity=2) as truncated:
+    with StableSlotExpertStore(tmp_path, capacity=2, demand_workers=2) as truncated:
         with pytest.raises(RuntimeError, match="short preadv"):
             truncated.execute(0, x, mx.array([[[2, 0]]], dtype=mx.int32))
 

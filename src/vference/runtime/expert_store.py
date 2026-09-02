@@ -324,6 +324,7 @@ class StableSlotExpertStore(SynchronousExpertStore):
         prefetch_policy: str = "none",
         prefetch_budget: int = 1,
         prefetch_min_observations: int = 8,
+        demand_workers: int = 1,
     ) -> None:
         if capacity < 1:
             raise ValueError("expert cache capacity must be positive")
@@ -361,9 +362,12 @@ class StableSlotExpertStore(SynchronousExpertStore):
             raise ValueError("prefetch budget must be between one and eight records")
         if prefetch_min_observations < 1:
             raise ValueError("prefetch minimum observations must be positive")
+        if not 1 <= demand_workers <= 8:
+            raise ValueError("demand workers must be between one and eight")
         self.prefetch_policy = prefetch_policy
         self.prefetch_budget = prefetch_budget
         self.prefetch_min_observations = prefetch_min_observations
+        self.demand_workers = demand_workers
         if cache_policy not in {"global", "layer", "demand"}:
             raise ValueError(f"unknown stable cache policy: {cache_policy}")
         if cache_policy == "layer" and capacity < self.layer_count:
@@ -417,6 +421,14 @@ class StableSlotExpertStore(SynchronousExpertStore):
         self._previous_layer_route: tuple[int, np.ndarray] | None = None
         self._prefetch_fd = -1
         self._prefetch_executor: ThreadPoolExecutor | None = None
+        self._demand_executor = (
+            ThreadPoolExecutor(
+                max_workers=demand_workers,
+                thread_name_prefix="vference-demand",
+            )
+            if demand_workers > 1
+            else None
+        )
         self._pending_prefetch: dict[tuple[int, int], Future[bytes]] = {}
         self.prefetch_submitted = 0
         self.prefetch_bytes_read = 0
@@ -439,6 +451,9 @@ class StableSlotExpertStore(SynchronousExpertStore):
             )
 
     def close(self) -> None:
+        if self._demand_executor is not None:
+            self._demand_executor.shutdown(wait=True, cancel_futures=True)
+            self._demand_executor = None
         if self._prefetch_executor is not None:
             self._prefetch_executor.shutdown(wait=True, cancel_futures=True)
             self._prefetch_executor = None
@@ -749,6 +764,8 @@ class StableSlotExpertStore(SynchronousExpertStore):
             raise RuntimeError(
                 "stable expert capacity is smaller than the simultaneously requested working set"
             )
+        if self._demand_executor is not None:
+            return self._resolve_slots_parallel(layer_id, host_indices, requested, protected)
         slots: dict[tuple[int, int], int] = {}
         layer_ordinal = self._layer_ordinals[layer_id]
         for key in requested:
@@ -765,6 +782,108 @@ class StableSlotExpertStore(SynchronousExpertStore):
                 self.misses += 1
                 self.layer_stats[layer_ordinal]["misses"] += 1
                 slots[key] = self._load_slot(*key, protected)
+        return np.asarray([slots[key] for key in requested], dtype=np.int32).reshape(
+            host_indices.shape
+        )
+
+    def _resolve_slots_parallel(
+        self,
+        layer_id: int,
+        host_indices: np.ndarray,
+        requested: list[tuple[int, int]],
+        protected: set[tuple[int, int]],
+    ) -> np.ndarray:
+        assert self._demand_executor is not None
+        slots: dict[tuple[int, int], int] = {}
+        pending: list[tuple[tuple[int, int], int]] = []
+        layer_ordinal = self._layer_ordinals[layer_id]
+        for key in requested:
+            if key in slots:
+                self.hits += 1
+                self.layer_stats[layer_ordinal]["hits"] += 1
+                continue
+            if key in self._cache:
+                self.hits += 1
+                self.layer_stats[layer_ordinal]["hits"] += 1
+                self._cache.move_to_end(key)
+                slots[key] = self._cache[key]
+            else:
+                self.misses += 1
+                self.layer_stats[layer_ordinal]["misses"] += 1
+                slot = self._allocate_slot(key, protected)
+                slots[key] = slot
+                pending.append((key, slot))
+
+        demand: list[tuple[tuple[int, int], int]] = []
+        try:
+            for key, slot in pending:
+                record = self._take_prefetched(key)
+                if record is None:
+                    demand.append((key, slot))
+                    continue
+                copy_started = time.perf_counter_ns()
+                count = self._native.copy_record_into(
+                    self._ordered_pools,
+                    slot,
+                    self._segment_bytes,
+                    record,
+                )
+                self.prefetch_copy_ns += time.perf_counter_ns() - copy_started
+                if count != self.record_size:
+                    raise OSError(
+                        f"short staged expert copy for {key}: {count} != {self.record_size}"
+                    )
+
+            if demand:
+                read_started = time.perf_counter_ns()
+                if len(demand) == 1:
+                    key, slot = demand[0]
+                    counts = [
+                        self._reader.read_into(
+                            self._ordered_pools,
+                            slot,
+                            self._record_offset(*key),
+                            self._segment_bytes,
+                        )
+                    ]
+                else:
+                    futures = [
+                        self._demand_executor.submit(
+                            self._reader.read_into,
+                            self._ordered_pools,
+                            slot,
+                            self._record_offset(*key),
+                            self._segment_bytes,
+                        )
+                        for key, slot in demand
+                    ]
+                    counts = []
+                    first_error: Exception | None = None
+                    for future in futures:
+                        try:
+                            counts.append(future.result())
+                        except Exception as error:
+                            first_error = first_error or error
+                    if first_error is not None:
+                        raise first_error
+                read_ns = time.perf_counter_ns() - read_started
+                if any(count != self.record_size for count in counts):
+                    raise OSError("short parallel expert read")
+                self.bytes_read += sum(counts)
+                self.read_ns += read_ns
+                self.layer_stats[layer_ordinal]["read_ns"] += read_ns
+        except Exception:
+            for _, slot in pending:
+                self._slot_keys[slot] = None
+                if self.cache_policy == "layer":
+                    self._free_slots_by_layer[layer_id].append(slot)
+                else:
+                    self._free_slots.append(slot)
+            raise
+
+        for key, slot in pending:
+            self._cache[key] = slot
+            self._slot_keys[slot] = key
         return np.asarray([slots[key] for key in requested], dtype=np.int32).reshape(
             host_indices.shape
         )
@@ -854,6 +973,7 @@ class StableSlotExpertStore(SynchronousExpertStore):
         values["prefetch_policy"] = self.prefetch_policy
         values["prefetch_budget"] = self.prefetch_budget
         values["prefetch_min_observations"] = self.prefetch_min_observations
+        values["demand_workers"] = self.demand_workers
         values["policy_transitions"] = list(self.policy_transitions)
         values["capacity_transitions"] = list(self.capacity_transitions)
         values["prefetch"] = {

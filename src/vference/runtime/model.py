@@ -28,6 +28,7 @@ def load_streaming_qwen(
     prefetch_policy: str = "none",
     prefetch_budget: int = 1,
     prefetch_min_observations: int = 8,
+    demand_workers: int = 1,
 ) -> tuple[Model, object, SynchronousExpertStore]:
     """Load the resident text core and attach exact synchronous expert streaming."""
     artifact = artifact.resolve()
@@ -52,10 +53,13 @@ def load_streaming_qwen(
         store_kwargs["prefetch_policy"] = prefetch_policy
         store_kwargs["prefetch_budget"] = prefetch_budget
         store_kwargs["prefetch_min_observations"] = prefetch_min_observations
+        store_kwargs["demand_workers"] = demand_workers
     elif cache_policy != "global":
         raise ValueError("the Python reference store only supports global LRU")
     elif prefetch_policy != "none":
         raise ValueError("the Python reference store does not support prefetch")
+    elif demand_workers != 1:
+        raise ValueError("the Python reference store does not support parallel demand")
     store = store_type(artifact, **store_kwargs)
     store.artifact_integrity = integrity
     for layer_id, layer in enumerate(model.language_model.layers):
