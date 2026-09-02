@@ -1,0 +1,93 @@
+{
+  "artifact": {
+    "expert_record_bytes": 1769472,
+    "expert_pack_sha256": "9b26ebdf13a2863d607e1c3ea6e2528ff0267b7f472f8fd37fd20d3adb497e18",
+    "model_revision": "1e20fd8d42056f870933bf98ca6211024744f7ec",
+    "repository": "mlx-community/Qwen3.5-35B-A3B-4bit"
+  },
+  "benchmark_commit": "6e78c8b",
+  "command": ".venv/bin/vference corpus-verify artifacts/qwen3.5-35b-a3b-4bit-runtime experiments/corpus/runtime-churn-v1.json --cache-capacity 8 --prefetch-policy none",
+  "corpus": "experiments/corpus/runtime-churn-v1.json",
+  "dependencies": {
+    "mlx": "0.32.2",
+    "mlx_lm": "0.31.3",
+    "nanobind": "2.15.0"
+  },
+  "hardware": {
+    "chip": "Apple M2",
+    "internal_free_bytes_after": 54079369216,
+    "memory_bytes": 8589934592,
+    "model": "Mac14,2",
+    "power": "AC power at post-run snapshot; metadata only",
+    "storage": "Internal APFS /dev/disk3s1s1 container over Apple Fabric",
+    "thermal": "pmset reported no thermal, performance, or CPU power warning after the run"
+  },
+  "operating_system": {
+    "build": "25G83",
+    "version": "macOS 26.6.2"
+  },
+  "recorded_at_local": "2026-09-02T08:54:28+08:00",
+  "configuration": {
+    "cache_capacity": 8,
+    "cache_policy": "global",
+    "filesystem_cache": "Warm buffered reads",
+    "prefetch_policy": "none",
+    "purpose": "The cache is deliberately limited to Qwen's one-token top-8 expert width. Cross-layer and cross-token residency is continuously evicted, and multi-token prefill working sets are split into exact groups. This is a correctness stress configuration, not a performance candidate."
+  },
+  "workload": {
+    "generated_tokens": 16,
+    "output_text": "This sequence juxtapes programming syntax, multilingual text, emojis, JSON data,",
+    "prompt_tokens": 98,
+    "total_tokens": 114,
+    "content": "Heterogeneous Python syntax, Japanese, Arabic, emoji, JSON, algebra, repeated tokens, and an exact identifier"
+  },
+  "correctness": {
+    "all_initial_logits_exact": true,
+    "all_output_tokens_exact": true,
+    "all_step_full_vocabulary_logits_bit_exact": true,
+    "max_initial_logits_abs_error": 0.0
+  },
+  "stable_store": {
+    "bytes_per_total_token": 378977441.68421054,
+    "bytes_read": 43203428352,
+    "execute_seconds": 26.110203424,
+    "hits": 12064,
+    "miss_rate": 0.6692982456140351,
+    "misses": 24416,
+    "pread_seconds": 14.525710709,
+    "resident_records": 8,
+    "router_and_graph_wait_seconds": 3.684566052
+  },
+  "reference_store": {
+    "bytes_per_total_token": 428693396.2105263,
+    "bytes_read": 48871047168,
+    "execute_seconds": 26.120932613,
+    "hits": 8861,
+    "materialize_seconds": 5.851876531,
+    "miss_rate": 0.7570997807017544,
+    "misses": 27619,
+    "pread_seconds": 15.129323677,
+    "resident_records": 8,
+    "router_and_graph_wait_seconds": 4.781906459
+  },
+  "memory": {
+    "mlx_peak_bytes": 2697404946,
+    "process_rss_bytes": {
+      "after_verification": 1230651392,
+      "before_load": 94388224,
+      "high_water": 1592279040
+    },
+    "system_swap_bytes": {
+      "after": 2170748928,
+      "before": 2179137536,
+      "delta": -8388608,
+      "swap_in_delta": 26401423360,
+      "swap_out_delta": 3719168
+    }
+  },
+  "decision": {
+    "status": "Forced minimum-capacity churn correctness gate passed",
+    "reason": "Despite a 66.9% stable-store miss rate, 43.2 GB of demand reads, no prefetch, continuous global eviction, and exact working-set splitting during prefill, every full-vocabulary generated-step logit vector and every output token matched the Python exact-expert reference. Swap occupancy did not grow.",
+    "quality_scope": "This validates exact execution under an intentionally hostile cache policy for this heterogeneous trace. It does not prove all possible route traces or compare 4-bit model quality with BF16."
+  }
+}

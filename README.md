@@ -90,6 +90,11 @@ multi-turn transcript, function-tool, and nested-JSON cases matched every
 full-vocabulary logit vector and selected token. The accepted run peaked at
 2.362 GB of MLX memory without swap growth.
 
+An additional no-prefetch stress case uses only eight global expert slots. It
+incurred a 66.9% miss rate and 43.2 GB of demand reads while constantly
+evicting and splitting prefill working sets, yet still matched every reference
+logit and output token without swap growth.
+
 `--decode-cache-capacity` can replace the stable expert pool at the synchronized
 prefill/decode boundary when a different phase budget is explicitly desired.
 It is not enabled automatically on the 8 GB target. Exact 480- and 560-slot 8K

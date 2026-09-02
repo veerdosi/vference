@@ -931,6 +931,18 @@ that harness-only overlap was fixed and the result is retained as a rejected
 memory qualification. See
 `experiments/runtime/runtime-application-v1-2026-09-02.json`.
 
+A separate forced-churn case reduced the global stable cache to eight records,
+the minimum capacity for one exact Qwen top-8 route, and disabled prefetch. Its
+98-token heterogeneous prefix caused the stable path to split multi-token
+working sets while continuously evicting across layers and tokens. Over 114
+total tokens it missed 24,416 expert requests (66.9%) and demand-read 43.203 GB.
+Nevertheless, all 16 generated-step full-vocabulary logits and tokens were
+bit-identical to the eight-record Python exact-expert reference. MLX peaked at
+2,697,404,946 bytes and swap decreased 8 MiB. This qualifies the exact grouping
+and eviction path under one deliberately hostile live trace; it is not a claim
+over every possible route trace. See
+`experiments/runtime/runtime-churn-v1-2026-09-02.json`.
+
 ### 8.3 Runtime release gates
 
 A storage/scheduler change is releasable only if:
@@ -1062,8 +1074,8 @@ admission are implemented. The first multi-turn split-state reference and a
 five-domain deterministic corpus pass exactly. Same-context baseline
 performance clears both frozen 10% improvement thresholds. Broader cases such
 as tool calls, schemas, corruption/failure injection, and stochastic sampling
-now pass their initial exact-reference corpora. Adversarial route churn and
-broader live multi-turn state reuse remain.
+now pass their initial exact-reference corpora, as does a forced minimum-
+capacity live churn trace. Broader live multi-turn state reuse remains.
 
 A 256-token prefill-chunk experiment is explicitly rejected even though it
 reduced peak MLX memory from 2.903 GB to 2.553 GB and decoded at 2.471 tok/s.
