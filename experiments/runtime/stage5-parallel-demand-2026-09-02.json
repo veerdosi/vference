@@ -1,0 +1,103 @@
+{
+  "experiment": "Parallel exact-demand expert reads",
+  "recorded_at_local": "2026-09-02T09:28:00+08:00",
+  "benchmark_commit": "83d454f240f7e166f01323186af973944c01d189",
+  "artifact": {
+    "repository": "mlx-community/Qwen3.5-35B-A3B-4bit",
+    "model_revision": "1e20fd8d42056f870933bf98ca6211024744f7ec",
+    "expert_pack_bytes": 18119393280,
+    "expert_pack_sha256": "9b26ebdf13a2863d607e1c3ea6e2528ff0267b7f472f8fd37fd20d3adb497e18"
+  },
+  "environment": {
+    "hardware": "MacBook Air Mac14,2, Apple M2, 8 GiB unified memory",
+    "operating_system": "macOS 26.6.2 build 25G83",
+    "storage": "active artifact on internal APFS Apple Fabric storage; about 54 GB free after the sustained run",
+    "dependencies": {"mlx": "0.32.2", "mlx_lm": "0.31.3", "nanobind": "2.15.0"},
+    "host_protocol": "Safari, VS Code, and optional applications were closed; Codex/ChatGPT remained open. Power source was allowed to vary naturally and was not an A/B factor.",
+    "cache_protocol": "F_NOCACHE was used for the expert pack in throughput runs; every process began with an empty bounded stable-slot cache."
+  },
+  "implementation": {
+    "mechanism": "The native positional reader releases the Python GIL. On a cache miss, up to eight exact records are read concurrently into distinct reserved stable slots. Cache publication occurs only after all required reads complete successfully.",
+    "correctness": "The router-selected expert IDs, top-K, weights, tensor layout, and MLX math are unchanged. A read failure clears reservations and raises; no substitute expert can be published.",
+    "qualified_demand_workers": 8
+  },
+  "storage_microbenchmark": {
+    "source": "/tmp/vference-demand-queue-microbench.json",
+    "record_size_bytes": 1769472,
+    "records_per_repetition": 4096,
+    "queue_depth": 8,
+    "order_control": "Two repetitions used reversed serial/parallel order.",
+    "serial_gb_per_second": [1.4251511760690123, 1.4206840387196793],
+    "parallel8_gb_per_second": [1.6499025999082317, 1.6532246471944458],
+    "parallel_improvement_percent": [15.769, 16.367]
+  },
+  "short_decode_ab": {
+    "workload": "Identical 64-token greedy generation, capacity 320, layer-partitioned decode cache, no prefetch",
+    "serial": {"source": "/tmp/vference-sync-profile-baseline.json", "decode_tokens_per_second": 2.3572994762901667, "demand_pread_seconds": 15.727729, "expert_execute_seconds": 25.622755, "mlx_peak_bytes": 2041603742, "swap_delta_bytes": -8388608},
+    "parallel8": {"source": "/tmp/vference-parallel-demand-8.json", "decode_tokens_per_second": 2.6254013901954596, "demand_pread_seconds": 14.081506, "expert_execute_seconds": 22.891983, "mlx_peak_bytes": 2041603742, "swap_delta_bytes": 0},
+    "result": "Exact output tokens and identical demand bytes/hits/misses; throughput +11.37%, demand pread -10.47%, with unchanged MLX peak."
+  },
+  "runtime_correctness": {
+    "application_corpus": {
+      "source": "/tmp/vference-parallel-prefetch-application-corpus.json",
+      "cases": 5,
+      "demand_workers": 8,
+      "prefetch_policy": "adaptive_cross budget 2, minimum 8 observations",
+      "all_step_full_vocabulary_logits_exact": true,
+      "all_tokens_exact": true,
+      "maximum_initial_logit_absolute_error": 0.0,
+      "mlx_peak_bytes": 2361542410,
+      "swap_delta_bytes": -8388608
+    },
+    "forced_churn": {
+      "source": "/tmp/vference-parallel-demand-correctness.json",
+      "cache_capacity": 8,
+      "demand_workers": 8,
+      "prefetch_policy": "none",
+      "demand_bytes": 43203428352,
+      "all_step_full_vocabulary_logits_exact": true,
+      "all_tokens_exact": true,
+      "maximum_initial_logit_absolute_error": 0.0,
+      "swap_delta_bytes": 0
+    }
+  },
+  "sustained_8k": {
+    "source": "/tmp/vference-parallel-demand-8k.json",
+    "workload": "7,936 repeated raw prompt tokens plus 256 greedy output tokens",
+    "configuration": "320 global prefill slots, 320 layer-partitioned decode slots, 512-token prefill chunks with allocator-cache clearing, F_NOCACHE, eight demand workers, adaptive prefetch budget 2/minimum 8 observations, 3 GiB admission budget",
+    "prefill_seconds": 184.84217295900453,
+    "decode_tokens_per_second": 2.5227124415222044,
+    "decode_latency_seconds": {"mean": 0.3963987268388783, "p50": 0.3955637500039302, "p95": 0.4506746660335921, "max": 0.49263183400034904},
+    "decode_demand_bytes": 99322232832,
+    "decode_prefetch_bytes": 18655543296,
+    "decode_physical_bytes": 117977776128,
+    "decode_pread_seconds": 60.35840319399999,
+    "decode_expert_execute_seconds": 96.18954353100003,
+    "decode_router_and_deferred_graph_seconds": 33.47648400700001,
+    "mlx_peak_bytes": 2903312538,
+    "decode_mlx_peak_bytes": 2430416556,
+    "process_rss_high_water_bytes": 1161920512,
+    "swap_delta_bytes": 0,
+    "admission_estimated_peak_bytes": 3202769032,
+    "admission_budget_bytes": 3221225472,
+    "output_token_count": 256,
+    "canonical_compact_token_json_sha256": "f4b04a69f0bb425f65d7103580aedf78b786bc324b6c2100083314a9a76b88bd",
+    "tokens_equal_historical_accepted_sequence": true,
+    "comparison_to_phase_profiled_serial_commit_e51467f": {"throughput_change_percent": 15.522, "prefill_time_change_percent": -9.305, "demand_pread_time_change_percent": -13.071, "expert_execute_time_change_percent": -13.712, "physical_byte_change_percent": -0.042},
+    "decision": "Accepted as the sustained qualification for eight-worker exact-demand reads. It exceeds the 2.0 tok/s gate, preserves the canonical output, and grows no swap. No repeat is required for this optimization."
+  },
+  "rejected_eager_fence": {
+    "sources": ["/tmp/vference-sync-profile-eager.json", "/tmp/vference-sync-profile-eager-phase.json"],
+    "result": "Explicitly evaluating expert outputs to move deferred MLX work out of the router timing bucket reduced short-run decode from 2.357 to 2.262 and 2.144 tok/s. The timing bucket includes deferred GPU work and is not pure removable CPU synchronization. The fence is rejected."
+  },
+  "excluded_run": {
+    "description": "A duplicate 8K attempt was interrupted during prefill after confirming that the apparent hash mismatch was only newline-sensitive serialization of the same token list.",
+    "exit_code": 130,
+    "included_in_results": false
+  },
+  "decision": {
+    "status": "qualified",
+    "selected_setting": "--demand-workers 8",
+    "next_bottleneck": "The runtime now reaches the measured approximately 1.65 GB/s queue-depth-eight internal-storage ceiling. Further gains require reducing/reorganizing physical reads or overlapping useful work, not repeating the same 8K qualification."
+  }
+}

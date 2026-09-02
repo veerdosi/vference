@@ -1122,7 +1122,38 @@ internal-SSD random-record result. The router/previous-graph synchronization
 path occupied another 40.138 seconds (157.4 ms/call). Expert execution totaled
 111.475 seconds inside 116.772 seconds of decode wall time; the run sustained
 2.184 tok/s and preserved the canonical token hash. Storage is the largest
-exposed decode cost, with serialized router/graph synchronization second.
+exposed decode cost. The second timing bucket was initially named router/graph
+synchronization, but an explicit MLX evaluation fence reduced short-run
+throughput from 2.357 tok/s to 2.262 and 2.144 tok/s. The bucket therefore
+includes useful deferred GPU work and must not be treated as pure removable
+host synchronization. The eager-fence optimization is rejected.
+
+The native pack reader now releases the Python GIL and can issue the exact
+miss set through eight concurrent reads into distinct reserved stable slots.
+Publication still waits for every required record; failure clears reservations
+and raises rather than substituting an expert. A real-pack, `F_NOCACHE`
+microbenchmark with two reversed-order repetitions raised 1,769,472-byte random
+record throughput from 1.421–1.425 GB/s serial to 1.650–1.653 GB/s at queue
+depth eight. An identical 64-token decode improved from 2.357 to 2.625 tok/s
+with unchanged demand bytes, hits, misses, output tokens, and MLX peak.
+
+The eight-worker path plus confidence-gated budget-two prefetch matched the
+Python exact-expert reference at every full-vocabulary logit vector in the
+five-case application corpus. A hostile eight-slot, no-prefetch trace also
+matched every logit and token while reading 43.20 GB through constant churn.
+The sustained 7,936-prompt/256-output run then preserved the canonical output
+hash, decoded at 2.523 tok/s, and grew no swap. Against the phase-profiled
+serial run, throughput increased 15.52%, demand-read time fell 13.07%, expert
+execution fell 13.71%, and physical bytes changed by only -0.04%. This single
+completed sustained run is accepted for this optimization because correctness
+had already passed the stronger full-logit corpora; it is not repeated merely
+to reconfirm a resolved hash-serialization mistake. The complete record is
+`experiments/runtime/stage5-parallel-demand-2026-09-02.json`.
+
+At about 1.65 GB/s, live demand reads now reach the independent queue-depth-
+eight storage measurement. The next storage optimization must reduce or
+reorganize physical traffic, improve useful overlap, or change the active
+artifact layout; repeating the same demand-queue run cannot raise that ceiling.
 
 Phase-specific pool replacement was implemented to test whether decode could
 spend memory released after bounded prefill. The first implementation was

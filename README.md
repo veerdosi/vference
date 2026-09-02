@@ -44,11 +44,12 @@ best qualified short-context decode configuration is:
 ```sh
 uv run vference stream-generate artifacts/qwen3.5-35b-a3b-4bit-runtime \
   --prompt 'Hello' --max-tokens 64 --store stable \
-  --cache-capacity 640 --cache-policy layer --prefill-chunk-size 32 --nocache
+  --cache-capacity 640 --cache-policy layer --prefill-chunk-size 32 \
+  --demand-workers 8 --nocache
 ```
 
-It remains experimental until the 8K context memory and reliability gate
-passes.
+It remains experimental while broader context, session-boundary, and release
+reliability work continues; the current 8K throughput and no-swap gate passes.
 
 For the current 8 GB long-context feasibility configuration, use 320 slots and
 bound allocator caching between prefill chunks:
@@ -57,10 +58,12 @@ bound allocator caching between prefill chunks:
 uv run vference stream-generate artifacts/qwen3.5-35b-a3b-4bit-runtime \
   --prompt 'Your long prompt' --max-tokens 256 --store stable \
   --cache-capacity 320 --cache-policy global --decode-cache-policy layer \
-  --prefill-chunk-size 512 --clear-cache-between-prefill-chunks --nocache
+  --prefill-chunk-size 512 --clear-cache-between-prefill-chunks \
+  --demand-workers 8 --prefetch-policy adaptive_cross --prefetch-budget 2 \
+  --nocache
 ```
 
-This configuration averaged 2.278 decode tok/s across three identical
+The serial-demand predecessor averaged 2.278 decode tok/s across three identical
 8K-total-token runs without swap growth, and a separate 7,936-token needle
 retrieval returned the expected code. Unsafe contexts are rejected against a
 measured memory model before prefill. Stable slots also match the Python
@@ -68,6 +71,13 @@ exact-expert reference with zero logit error on the first split-state and
 five-domain deterministic corpus. Against an exact forced-demand 8K baseline,
 it improves throughput 17.6% and reduces exposed expert time 15.7%. It is not
 yet a release claim; broader long-context and application-surface cases remain.
+
+The native demand queue reads up to eight router-requested records concurrently
+into distinct reserved slots, then publishes only the exact requested experts.
+On the qualified 8K workload it preserved the canonical 256-token output,
+decoded at 2.523 tok/s, and grew no swap. Full-logit application and forced-
+churn comparisons also remained exact. Eight workers reached about 1.65 GB/s,
+the measured queue-depth-eight ceiling of the internal artifact path.
 
 Runtime artifacts are checked automatically before model load. The first use
 hashes every manifest-listed payload and support file; later runs use a
