@@ -1,0 +1,151 @@
+{
+  "artifact": {
+    "expert_pack_bytes": 18119393280,
+    "expert_pack_sha256": "9b26ebdf13a2863d607e1c3ea6e2528ff0267b7f472f8fd37fd20d3adb497e18",
+    "model_revision": "1e20fd8d42056f870933bf98ca6211024744f7ec",
+    "repository": "mlx-community/Qwen3.5-35B-A3B-4bit"
+  },
+  "benchmark_commit": "300ac26",
+  "command": ".venv/bin/vference corpus-verify artifacts/qwen3.5-35b-a3b-4bit-runtime experiments/corpus/runtime-application-v1.json --cache-capacity 320 --prefetch-policy adaptive_cross --prefetch-budget 2 --prefetch-min-observations 8",
+  "corpus": "experiments/corpus/runtime-application-v1.json",
+  "dependencies": {
+    "mlx": "0.32.2",
+    "mlx_lm": "0.31.3",
+    "nanobind": "2.15.0"
+  },
+  "hardware": {
+    "chip": "Apple M2",
+    "internal_free_bytes_after": 54083493888,
+    "memory_bytes": 8589934592,
+    "model": "Mac14,2",
+    "power": "AC power at post-run snapshot; metadata only, not a separate qualification axis",
+    "storage": "Internal APFS /dev/disk3s1s1 container over Apple Fabric",
+    "thermal": "pmset reported no thermal, performance, or CPU power warning after the run"
+  },
+  "operating_system": {
+    "build": "25G83",
+    "version": "macOS 26.6.2"
+  },
+  "recorded_at_local": "2026-09-02T08:51:05+08:00",
+  "configuration": {
+    "artifact_integrity": {
+      "cached": true,
+      "elapsed_seconds": 0.0003489169757813215,
+      "verified": true
+    },
+    "cache_capacity": 320,
+    "cache_policy": "global",
+    "filesystem_cache": "Warm from preceding verification; expert reads were buffered (nocache=false)",
+    "prefetch_budget": 2,
+    "prefetch_min_observations": 8,
+    "prefetch_policy": "adaptive_cross",
+    "reference": "Python synchronous exact-expert store with the same model instance, rendered prompt tokens, sampler, and empty initial 320-record cache",
+    "stable": "Native stable-slot store with an empty initial 320-record cache; pool is released before the reference phase"
+  },
+  "workload": {
+    "case_count": 5,
+    "domains": [
+      "very short prompt",
+      "repeated tokens",
+      "multi-turn chat transcript",
+      "function tool declaration",
+      "nested JSON schema"
+    ],
+    "generated_steps": 69,
+    "total_prompt_tokens": 512,
+    "cases": [
+      {
+        "id": "very_short",
+        "output_text": "Hello! How can I help you today",
+        "output_tokens": 8,
+        "prompt_tokens": 14
+      },
+      {
+        "id": "repeated_tokens",
+        "output_text": "DONE<|im_end|>",
+        "output_tokens": 2,
+        "prompt_tokens": 56
+      },
+      {
+        "id": "multi_turn_transcript",
+        "output_text": "ORCHID-7319<|im_end|>",
+        "output_tokens": 9,
+        "prompt_tokens": 65
+      },
+      {
+        "id": "tool_declaration",
+        "output_text": "<tool_call>\n<function=get_weather>\n<parameter=city>\nSingapore\n</parameter>\n</function>\n",
+        "output_tokens": 24,
+        "prompt_tokens": 316
+      },
+      {
+        "id": "nested_json_schema",
+        "output_text": "{\"service\":\"vference\",\"healthy\":true,\"metrics\":{\"queue_depth\":0,\"tokens_per_second\":2.0}}<|im_end|>",
+        "output_tokens": 26,
+        "prompt_tokens": 61
+      }
+    ]
+  },
+  "correctness": {
+    "all_initial_logits_exact": true,
+    "all_selected_tokens_exact": true,
+    "all_step_full_vocabulary_logits_bit_exact": true,
+    "max_initial_logits_abs_error": 0.0
+  },
+  "stable_store": {
+    "bytes_read": 66562228224,
+    "execute_seconds": 67.906733839,
+    "hits": 146723,
+    "misses": 38237,
+    "pread_seconds": 47.585860045,
+    "prefetch": {
+      "already_resident": 849,
+      "bytes_read": 3482320896,
+      "failed": 0,
+      "late": 30,
+      "submitted": 1971,
+      "total_physical_bytes": 70044549120,
+      "useful": 620,
+      "wait_seconds": 0.004981165,
+      "wrong": 1354
+    },
+    "router_and_graph_wait_seconds": 19.752454997
+  },
+  "reference_store": {
+    "bytes_read": 70747029504,
+    "execute_seconds": 75.362411837,
+    "hits": 144978,
+    "materialize_seconds": 5.629012939,
+    "misses": 39982,
+    "pread_seconds": 47.563898977,
+    "router_and_graph_wait_seconds": 20.923700291
+  },
+  "memory": {
+    "mlx_active_bytes_at_result": 1945100426,
+    "mlx_peak_bytes": 2361544522,
+    "process_rss_bytes": {
+      "after_verification": 656572416,
+      "before_load": 93929472,
+      "high_water": 1766473728
+    },
+    "system_swap_bytes": {
+      "after": 2195914752,
+      "before": 2229469184,
+      "delta": -33554432,
+      "swap_in_delta": 107995168768,
+      "swap_out_delta": 7258112
+    }
+  },
+  "rejected_harness_overlap": {
+    "description": "The first corpus run kept the 320-record native stable pool alive while the Python reference cache was populated. That verifier-only overlap is not part of inference and was removed before accepting the measurement.",
+    "mlx_peak_bytes": 2928021002,
+    "swap_delta_bytes": 1376976896,
+    "stable_pool_bytes_recovered_by_fix": 566476480,
+    "status": "rejected as a memory qualification; its per-step logits and output tokens were nevertheless also exact"
+  },
+  "decision": {
+    "status": "Application-surface runtime correctness corpus passed",
+    "reason": "Every generated-step full-vocabulary logit vector and every selected token matched the exact Python expert reference. This includes Qwen's real tool template, a multi-turn transcript, repeated tokens, and nested structured output. Releasing the stable verifier pool before constructing the reference removed the artificial 566 MB overlap; the accepted rerun had no swap growth.",
+    "quality_scope": "This proves storage, cache, and adaptive prefetch preserve the pinned 4-bit model's behavior on these application surfaces. It does not compare the 4-bit checkpoint with BF16."
+  }
+}

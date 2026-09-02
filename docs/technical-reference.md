@@ -916,6 +916,21 @@ rewrite the artifact, manifest, and stamp together. Full measurements and
 commands are in
 `experiments/runtime/runtime-failure-injection-v1-2026-09-02.json`.
 
+The deterministic application corpus now accepts complete chat transcripts
+and tool declarations as tokenizer inputs. Five cases covered a 14-token short
+prompt, repeated tokens, a four-message transcript, Qwen's real function-tool
+template, and nested JSON output. Across 512 prompt tokens and 69 generated
+steps, the stable adaptive-prefetch runtime and Python exact-expert reference
+had bit-identical full-vocabulary logits at every step and identical selected
+tokens. The tool case emitted a `get_weather` call for Singapore, the transcript
+returned `ORCHID-7319`, and the JSON case satisfied its requested nested shape.
+The accepted verifier run peaked at 2,361,544,522 MLX bytes and system swap
+decreased 33,554,432 bytes. An earlier run that incorrectly retained the
+566,476,480-byte stable pool during the reference phase grew swap by 1.377 GB;
+that harness-only overlap was fixed and the result is retained as a rejected
+memory qualification. See
+`experiments/runtime/runtime-application-v1-2026-09-02.json`.
+
 ### 8.3 Runtime release gates
 
 A storage/scheduler change is releasable only if:
@@ -1046,8 +1061,9 @@ needle-retrieval case passed. Exact Qwen state accounting and measured-profile
 admission are implemented. The first multi-turn split-state reference and a
 five-domain deterministic corpus pass exactly. Same-context baseline
 performance clears both frozen 10% improvement thresholds. Broader cases such
-as tool calls, schemas, adversarial churn, corruption/failure injection, and
-stochastic sampling remain.
+as tool calls, schemas, corruption/failure injection, and stochastic sampling
+now pass their initial exact-reference corpora. Adversarial route churn and
+broader live multi-turn state reuse remain.
 
 A 256-token prefill-chunk experiment is explicitly rejected even though it
 reduced peak MLX memory from 2.903 GB to 2.553 GB and decoded at 2.471 tok/s.

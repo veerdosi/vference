@@ -84,6 +84,12 @@ failed speculative reads, insufficient exact working-set capacity, and unsafe
 memory admission. All fail explicitly or fall back to the exact requested
 expert; none can silently alter model math.
 
+The application corpus also compares real chat transcripts and Qwen tool
+declarations with the exact Python expert reference. Very short, repeated-token,
+multi-turn transcript, function-tool, and nested-JSON cases matched every
+full-vocabulary logit vector and selected token. The accepted run peaked at
+2.362 GB of MLX memory without swap growth.
+
 `--decode-cache-capacity` can replace the stable expert pool at the synchronized
 prefill/decode boundary when a different phase budget is explicitly desired.
 It is not enabled automatically on the 8 GB target. Exact 480- and 560-slot 8K
