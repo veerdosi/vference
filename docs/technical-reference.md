@@ -675,6 +675,39 @@ Until all gates pass, it remains isolated behind an experimental switch and the
 existing exact MLX path stays the default. This preserves current model quality
 even if Core ML proves unsuitable on M2.
 
+The first standalone decode-shape probe ran on 2026-09-04 using layer 0,
+deterministic synthetic `(1, 1, 2048)` input, 100 warmups, and 1,000 measured
+iterations. The ML Program was a 6,304,673-byte dense-FP16 reconstruction of
+the shared expert. `MLComputePlan` reported every non-constant operation as
+Neural-Engine-preferred for both `all` and CPU+Neural-Engine configurations.
+This confirms real ANE eligibility on M2.
+
+| Execution path | p50 | Mean | Load RSS delta | Max abs error vs MLX BF16 qmm |
+| --- | ---: | ---: | ---: | ---: |
+| MLX BF16 4-bit qmm | 0.243 ms | 0.295 ms | not isolated | 0 after FP16 cast |
+| Core ML CPU only | 0.069 ms | 0.072 ms | 9.69 MiB | 0.008301 |
+| Core ML CPU+GPU | 0.378 ms | 0.434 ms | 24.80 MiB | 0.002441 |
+| Core ML CPU+ANE | 0.303 ms | 0.305 ms | 11.38 MiB | 0.005859 |
+| Core ML all | 0.304 ms | 0.305 ms | 20.63 MiB | 0.005859 |
+
+The standalone ANE call is about 25% slower at p50 than the MLX branch, though
+nearly equal in mean because the MLX sample had long-tail outliers. It is not a
+standalone speed win. It remains worth one integration experiment because its
+approximately 0.303 ms can potentially be hidden under per-layer exact-expert
+I/O while freeing the GPU; only an asynchronous end-to-end measurement can
+test that hypothesis. The Core ML output is not bit-identical, so real hidden-
+state capture and downstream route/logit/token comparison are mandatory before
+integration. Naively loading 40 independent models would also multiply the
+observed per-model RSS delta and is not an acceptable final design.
+
+Core ML Tools 9.0 successfully converted and compiled the graph, but its Python
+`MLModel` wrapper failed to load the generated package on this macOS 26.6.2
+host with an invalid compiled-package-layout error. The native Swift Core ML
+API compiled, loaded, predicted, and returned compute-plan data correctly.
+Conversion therefore remains Python/MIL while measurement and any runtime
+bridge use the supported native API. See
+`experiments/runtime/stage7-coreml-shared-expert-probe-2026-09-04.json`.
+
 ## 8. Correctness and quality qualification
 
 ### 8.1 Reference hierarchy

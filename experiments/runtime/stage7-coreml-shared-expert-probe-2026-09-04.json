@@ -1,0 +1,586 @@
+{
+  "artifact": {
+    "expert_pack_sha256": "9b26ebdf13a2863d607e1c3ea6e2528ff0267b7f472f8fd37fd20d3adb497e18",
+    "manifest_sha256": "06c2754d72e6a77ce5984d19ea0f27bcad17f866695cdaec1bd9c5edfd2fd1d1",
+    "model_revision": "1e20fd8d42056f870933bf98ca6211024744f7ec",
+    "repository": "mlx-community/Qwen3.5-35B-A3B-4bit"
+  },
+  "benchmark_commit": "9443a49dde08d1d9699f2a85af6d70739df20833",
+  "coreml": {
+    "all": {
+      "compile_seconds": 0.029220042,
+      "compute_plan_operations": [
+        {
+          "operator": "const"
+        },
+        {
+          "operator": "const"
+        },
+        {
+          "estimated_cost_weight": 0.4446018709145956,
+          "operator": "ios18.linear",
+          "preferred_device": "neural_engine",
+          "supported_devices": [
+            "cpu",
+            "gpu",
+            "neural_engine"
+          ]
+        },
+        {
+          "operator": "const"
+        },
+        {
+          "estimated_cost_weight": 0.4446018709145956,
+          "operator": "ios18.linear",
+          "preferred_device": "neural_engine",
+          "supported_devices": [
+            "cpu",
+            "gpu",
+            "neural_engine"
+          ]
+        },
+        {
+          "estimated_cost_weight": 0.00015901961120640186,
+          "operator": "ios18.silu",
+          "preferred_device": "neural_engine",
+          "supported_devices": [
+            "cpu",
+            "gpu",
+            "neural_engine"
+          ]
+        },
+        {
+          "estimated_cost_weight": 0.0002700169419167495,
+          "operator": "ios18.mul",
+          "preferred_device": "neural_engine",
+          "supported_devices": [
+            "cpu",
+            "gpu",
+            "neural_engine"
+          ]
+        },
+        {
+          "operator": "const"
+        },
+        {
+          "operator": "const"
+        },
+        {
+          "estimated_cost_weight": 0.02789445976809303,
+          "operator": "ios18.linear",
+          "preferred_device": "neural_engine",
+          "supported_devices": [
+            "cpu",
+            "gpu",
+            "neural_engine"
+          ]
+        },
+        {
+          "operator": "const"
+        },
+        {
+          "operator": "const"
+        },
+        {
+          "estimated_cost_weight": 0.08193215369216143,
+          "operator": "ios18.linear",
+          "preferred_device": "neural_engine",
+          "supported_devices": [
+            "cpu",
+            "gpu",
+            "neural_engine"
+          ]
+        },
+        {
+          "estimated_cost_weight": 3.1058517813750363e-07,
+          "operator": "ios18.sigmoid",
+          "preferred_device": "neural_engine",
+          "supported_devices": [
+            "cpu",
+            "gpu",
+            "neural_engine"
+          ]
+        },
+        {
+          "estimated_cost_weight": 0.0005402975722533396,
+          "operator": "ios18.mul",
+          "preferred_device": "neural_engine",
+          "supported_devices": [
+            "cpu",
+            "gpu",
+            "neural_engine"
+          ]
+        }
+      ],
+      "compute_units": "all",
+      "input_name": "x",
+      "iterations": 1000,
+      "latency_seconds": {
+        "max": 0.000462792,
+        "mean": 0.0003051427720000002,
+        "min": 0.000246625,
+        "p50": 0.000303667,
+        "p95": 0.000347833
+      },
+      "load_seconds": 0.103146875,
+      "output_shape": [
+        1,
+        1,
+        2048
+      ],
+      "reference_error": {
+        "cosine_similarity": 0.9998697638511658,
+        "exact_fp16": false,
+        "max_absolute": 0.005859375,
+        "mean_absolute": 0.0004435608861967921,
+        "output_sha256": "01590a6314d60311cacacbedbbaa0461f6bffe67199bb7dc74d6f8b7ba1b4451"
+      },
+      "resident_bytes": {
+        "after_benchmark": 30654464,
+        "after_load": 27983872,
+        "initial": 6356992,
+        "load_delta": 21626880
+      },
+      "warmup": 100
+    },
+    "cpu_gpu": {
+      "compile_seconds": 0.028718958,
+      "compute_plan_operations": [
+        {
+          "operator": "const"
+        },
+        {
+          "operator": "const"
+        },
+        {
+          "estimated_cost_weight": 0.4801755800707778,
+          "operator": "ios18.linear",
+          "preferred_device": "gpu",
+          "supported_devices": [
+            "cpu",
+            "gpu"
+          ]
+        },
+        {
+          "operator": "const"
+        },
+        {
+          "estimated_cost_weight": 0.4801755800707778,
+          "operator": "ios18.linear",
+          "preferred_device": "gpu",
+          "supported_devices": [
+            "cpu",
+            "gpu"
+          ]
+        },
+        {
+          "estimated_cost_weight": 0.00046041232797460916,
+          "operator": "ios18.silu",
+          "preferred_device": "gpu",
+          "supported_devices": [
+            "cpu",
+            "gpu"
+          ]
+        },
+        {
+          "estimated_cost_weight": 0.0011205583384181644,
+          "operator": "ios18.mul",
+          "preferred_device": "gpu",
+          "supported_devices": [
+            "cpu",
+            "gpu"
+          ]
+        },
+        {
+          "operator": "const"
+        },
+        {
+          "operator": "const"
+        },
+        {
+          "estimated_cost_weight": 0.030126365353235256,
+          "operator": "ios18.linear",
+          "preferred_device": "gpu",
+          "supported_devices": [
+            "cpu",
+            "gpu"
+          ]
+        },
+        {
+          "operator": "const"
+        },
+        {
+          "operator": "const"
+        },
+        {
+          "estimated_cost_weight": 0.00569839362389961,
+          "operator": "ios18.linear",
+          "preferred_device": "gpu",
+          "supported_devices": [
+            "cpu",
+            "gpu"
+          ]
+        },
+        {
+          "estimated_cost_weight": 8.992428280754085e-07,
+          "operator": "ios18.sigmoid",
+          "preferred_device": "gpu",
+          "supported_devices": [
+            "cpu",
+            "gpu"
+          ]
+        },
+        {
+          "estimated_cost_weight": 0.0022422109720886905,
+          "operator": "ios18.mul",
+          "preferred_device": "gpu",
+          "supported_devices": [
+            "cpu",
+            "gpu"
+          ]
+        }
+      ],
+      "compute_units": "cpu_gpu",
+      "input_name": "x",
+      "iterations": 1000,
+      "latency_seconds": {
+        "max": 0.003510875,
+        "mean": 0.0004340927210000005,
+        "min": 0.000317042,
+        "p50": 0.000378417,
+        "p95": 0.000463584
+      },
+      "load_seconds": 0.075204917,
+      "output_shape": [
+        1,
+        1,
+        2048
+      ],
+      "reference_error": {
+        "cosine_similarity": 0.9999385476112366,
+        "exact_fp16": false,
+        "max_absolute": 0.00244140625,
+        "mean_absolute": 0.00030680419877171516,
+        "output_sha256": "89f19e76ea1bb30720abea762a5ab7900cb7b03a71c57d06a83a903c44c9f8f7"
+      },
+      "resident_bytes": {
+        "after_benchmark": 45219840,
+        "after_load": 32358400,
+        "initial": 6356992,
+        "load_delta": 26001408
+      },
+      "warmup": 100
+    },
+    "cpu_ne": {
+      "compile_seconds": 0.028641125,
+      "compute_plan_operations": [
+        {
+          "operator": "const"
+        },
+        {
+          "operator": "const"
+        },
+        {
+          "estimated_cost_weight": 0.4446018709145955,
+          "operator": "ios18.linear",
+          "preferred_device": "neural_engine",
+          "supported_devices": [
+            "cpu",
+            "neural_engine"
+          ]
+        },
+        {
+          "operator": "const"
+        },
+        {
+          "estimated_cost_weight": 0.4446018709145955,
+          "operator": "ios18.linear",
+          "preferred_device": "neural_engine",
+          "supported_devices": [
+            "cpu",
+            "neural_engine"
+          ]
+        },
+        {
+          "estimated_cost_weight": 0.00015901961120640183,
+          "operator": "ios18.silu",
+          "preferred_device": "neural_engine",
+          "supported_devices": [
+            "cpu",
+            "neural_engine"
+          ]
+        },
+        {
+          "estimated_cost_weight": 0.00027001694191674944,
+          "operator": "ios18.mul",
+          "preferred_device": "neural_engine",
+          "supported_devices": [
+            "cpu",
+            "neural_engine"
+          ]
+        },
+        {
+          "operator": "const"
+        },
+        {
+          "operator": "const"
+        },
+        {
+          "estimated_cost_weight": 0.027894459768093023,
+          "operator": "ios18.linear",
+          "preferred_device": "neural_engine",
+          "supported_devices": [
+            "cpu",
+            "neural_engine"
+          ]
+        },
+        {
+          "operator": "const"
+        },
+        {
+          "operator": "const"
+        },
+        {
+          "estimated_cost_weight": 0.08193215369216143,
+          "operator": "ios18.linear",
+          "preferred_device": "neural_engine",
+          "supported_devices": [
+            "cpu",
+            "neural_engine"
+          ]
+        },
+        {
+          "estimated_cost_weight": 3.105851781375036e-07,
+          "operator": "ios18.sigmoid",
+          "preferred_device": "neural_engine",
+          "supported_devices": [
+            "cpu",
+            "neural_engine"
+          ]
+        },
+        {
+          "estimated_cost_weight": 0.0005402975722533396,
+          "operator": "ios18.mul",
+          "preferred_device": "neural_engine",
+          "supported_devices": [
+            "cpu",
+            "neural_engine"
+          ]
+        }
+      ],
+      "compute_units": "cpu_ne",
+      "input_name": "x",
+      "iterations": 1000,
+      "latency_seconds": {
+        "max": 0.000460625,
+        "mean": 0.0003047746489999995,
+        "min": 0.000250208,
+        "p50": 0.000303416,
+        "p95": 0.000343208
+      },
+      "load_seconds": 0.100094,
+      "output_shape": [
+        1,
+        1,
+        2048
+      ],
+      "reference_error": {
+        "cosine_similarity": 0.9998697638511658,
+        "exact_fp16": false,
+        "max_absolute": 0.005859375,
+        "mean_absolute": 0.0004435608861967921,
+        "output_sha256": "01590a6314d60311cacacbedbbaa0461f6bffe67199bb7dc74d6f8b7ba1b4451"
+      },
+      "resident_bytes": {
+        "after_benchmark": 20987904,
+        "after_load": 18284544,
+        "initial": 6356992,
+        "load_delta": 11927552
+      },
+      "warmup": 100
+    },
+    "cpu_only": {
+      "compile_seconds": 0.050146041,
+      "compute_plan_operations": [
+        {
+          "operator": "const"
+        },
+        {
+          "operator": "const"
+        },
+        {
+          "estimated_cost_weight": 0.1952325564575067,
+          "operator": "ios18.linear",
+          "preferred_device": "cpu",
+          "supported_devices": [
+            "cpu"
+          ]
+        },
+        {
+          "operator": "const"
+        },
+        {
+          "estimated_cost_weight": 0.1952325564575067,
+          "operator": "ios18.linear",
+          "preferred_device": "cpu",
+          "supported_devices": [
+            "cpu"
+          ]
+        },
+        {
+          "estimated_cost_weight": 5.3947587289490216e-05,
+          "operator": "ios18.silu",
+          "preferred_device": "cpu",
+          "supported_devices": [
+            "cpu"
+          ]
+        },
+        {
+          "estimated_cost_weight": 0.0002853771523473242,
+          "operator": "ios18.mul",
+          "preferred_device": "cpu",
+          "supported_devices": [
+            "cpu"
+          ]
+        },
+        {
+          "operator": "const"
+        },
+        {
+          "operator": "const"
+        },
+        {
+          "estimated_cost_weight": 0.01224895136028788,
+          "operator": "ios18.linear",
+          "preferred_device": "cpu",
+          "supported_devices": [
+            "cpu"
+          ]
+        },
+        {
+          "operator": "const"
+        },
+        {
+          "operator": "const"
+        },
+        {
+          "estimated_cost_weight": 0.5963754726253603,
+          "operator": "ios18.linear",
+          "preferred_device": "cpu",
+          "supported_devices": [
+            "cpu"
+          ]
+        },
+        {
+          "estimated_cost_weight": 1.0536638142478558e-07,
+          "operator": "ios18.sigmoid",
+          "preferred_device": "cpu",
+          "supported_devices": [
+            "cpu"
+          ]
+        },
+        {
+          "estimated_cost_weight": 0.0005710329933199876,
+          "operator": "ios18.mul",
+          "preferred_device": "cpu",
+          "supported_devices": [
+            "cpu"
+          ]
+        }
+      ],
+      "compute_units": "cpu_only",
+      "input_name": "x",
+      "iterations": 1000,
+      "latency_seconds": {
+        "max": 0.000139958,
+        "mean": 7.222775800000007e-05,
+        "min": 5.7125e-05,
+        "p50": 6.9042e-05,
+        "p95": 9.3042e-05
+      },
+      "load_seconds": 0.048532625,
+      "output_shape": [
+        1,
+        1,
+        2048
+      ],
+      "reference_error": {
+        "cosine_similarity": 0.999908447265625,
+        "exact_fp16": false,
+        "max_absolute": 0.00830078125,
+        "mean_absolute": 0.00037168836570344865,
+        "output_sha256": "9ff0050cc1193bd43c17fe66c9c24f1a32b8c417cb7719736c68aa5193b65526"
+      },
+      "resident_bytes": {
+        "after_benchmark": 25575424,
+        "after_load": 16515072,
+        "initial": 6356992,
+        "load_delta": 10158080
+      },
+      "warmup": 100
+    }
+  },
+  "coreml_artifact": {
+    "format": "dense float16 ML Program",
+    "package_bytes": 6304673,
+    "package_sha256_by_file": {
+      "Data/com.apple.CoreML/model.mlmodel": "0be081469f49cb63c844613e309c4b14d7e26e4436b845b7ad131f60bbc9e67a",
+      "Data/com.apple.CoreML/weights/weight.bin": "9fdec101d3a0abbdacbb32d731519674efeeec782c7d1d0c9d7e1b119e92929f",
+      "Manifest.json": "d50753b245a3997d8af995f25b1de887a3078e69115ed19c2a2c716b6dbf6bb6"
+    }
+  },
+  "decision": {
+    "next_action": "Capture real hidden states, measure asynchronous overlap with exact expert I/O, and reject unless end-to-end behavior and correctness gates pass.",
+    "quality": "Core ML output is not bit-identical to MLX BF16 quantized matmul, so it cannot become a default path without downstream route/logit/token qualification.",
+    "status": "placement and microbenchmark evidence only; not integrated",
+    "tooling_observation": "coremltools 9.0 conversion and compilation succeeded, but the Python MLModel wrapper failed to load the generated package on macOS 26.6.2 with an invalid compiled-package-layout error. The native Swift Core ML framework compiled, loaded, predicted, and returned MLComputePlan placement successfully."
+  },
+  "environment": {
+    "coremltools": "9.0",
+    "hardware": "MacBook Air Mac14,2, Apple M2, 8 GiB unified memory",
+    "operating_system": "macOS-26.6.2-arm64-arm-64bit",
+    "swift": "Apple Swift version 6.3.3 (swiftlang-6.3.3.1.3 clang-2100.1.1.101)"
+  },
+  "experiment": "Standalone Core ML shared-expert placement and latency probe",
+  "mlx": {
+    "bfloat16": {
+      "latency_seconds": {
+        "max": 0.005610167,
+        "mean": 0.00029466899,
+        "min": 0.000181667,
+        "p50": 0.00024283349999999998,
+        "p95": 0.0003132788499999999
+      },
+      "reference_error": {
+        "exact_fp16": true
+      }
+    },
+    "float16": {
+      "latency_seconds": {
+        "max": 0.002460042,
+        "mean": 0.000326207163,
+        "min": 0.000199166,
+        "p50": 0.00026775,
+        "p95": 0.00035648394999999983
+      },
+      "reference_error": {
+        "exact_fp16": false
+      }
+    }
+  },
+  "recorded_at_local": "2026-09-04T17:28:29+08:00",
+  "workload": {
+    "coreml_boundary_dtype": "float16",
+    "iterations": 1000,
+    "kind": "synthetic deterministic standalone layer input",
+    "layer": 0,
+    "seed": 20260904,
+    "shape": [
+      1,
+      1,
+      2048
+    ],
+    "source_dtype": "bfloat16 activation with MLX group-64 affine 4-bit matmul",
+    "warmup": 100
+  }
+}
