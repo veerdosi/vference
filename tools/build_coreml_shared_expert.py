@@ -20,6 +20,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--layer", type=int, default=0)
     parser.add_argument("--sequence-length", type=int, default=1)
     parser.add_argument("--seed", type=int, default=20260904)
+    parser.add_argument("--input-raw", type=Path)
     return parser.parse_args()
 
 
@@ -81,8 +82,21 @@ def main() -> None:
     down_prefix = f"{prefix}.shared_expert.down_proj"
     shared_gate_prefix = f"{prefix}.shared_expert_gate"
 
-    rng = np.random.default_rng(args.seed)
-    input_fp16 = rng.standard_normal((1, args.sequence_length, hidden_size)).astype(np.float16)
+    if args.input_raw is None:
+        rng = np.random.default_rng(args.seed)
+        input_fp16 = rng.standard_normal((1, args.sequence_length, hidden_size)).astype(
+            np.float16
+        )
+        input_source = "synthetic deterministic normal"
+    else:
+        input_fp16 = np.fromfile(args.input_raw, dtype=np.float16)
+        expected = args.sequence_length * hidden_size
+        if input_fp16.size != expected:
+            raise ValueError(
+                f"input has {input_fp16.size} float16 values; expected {expected}"
+            )
+        input_fp16 = input_fp16.reshape(1, args.sequence_length, hidden_size)
+        input_source = str(args.input_raw.resolve())
     input_bf16 = mx.array(input_fp16).astype(mx.bfloat16)
     gate = _quantized_linear(input_bf16, weights, gate_prefix)
     up = _quantized_linear(input_bf16, weights, up_prefix)
@@ -146,6 +160,7 @@ def main() -> None:
         "hidden_size": hidden_size,
         "intermediate_size": intermediate_size,
         "seed": args.seed,
+        "input_source": input_source,
         "source_dtype": "bfloat16 activation with MLX group-64 affine 4-bit matmul",
         "coreml_boundary_dtype": "float16",
         "package": package.name,
