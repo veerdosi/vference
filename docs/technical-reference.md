@@ -708,6 +708,17 @@ Conversion therefore remains Python/MIL while measurement and any runtime
 bridge use the supported native API. See
 `experiments/runtime/stage7-coreml-shared-expert-probe-2026-09-04.json`.
 
+A follow-up used the actual layer-0 decode hidden state captured after a
+24-token Qwen prompt. It confirmed the same placement and direction: MLX BF16
+4-bit qmm measured 0.195 ms p50, while CPU+ANE measured 0.289 ms p50 (48.2%
+slower in isolation). The ANE result had 0.001129 maximum and 0.000114 mean
+absolute error after the FP16 boundary conversion. CPU-only Core ML measured
+0.066 ms p50 but had 0.000320 maximum error. These are standalone branch
+results, not end-to-end wins or quality qualification. They narrow the ANE
+hypothesis to asynchronous overlap with routed-expert I/O; simply replacing the
+MLX call synchronously would be a regression. See
+`experiments/runtime/stage7-coreml-shared-expert-real-2026-09-04.json`.
+
 ## 8. Correctness and quality qualification
 
 ### 8.1 Reference hierarchy
