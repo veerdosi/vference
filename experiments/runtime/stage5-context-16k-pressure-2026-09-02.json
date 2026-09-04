@@ -1,0 +1,75 @@
+{
+  "experiment": "First phase-aware 16K context run",
+  "recorded_at_local": "2026-09-02T09:59:00+08:00",
+  "benchmark_commit": "715261f443ccc93091503fa7cc1308c7b109e78b",
+  "artifact": {
+    "repository": "mlx-community/Qwen3.5-35B-A3B-4bit",
+    "model_revision": "1e20fd8d42056f870933bf98ca6211024744f7ec",
+    "expert_pack_sha256": "9b26ebdf13a2863d607e1c3ea6e2528ff0267b7f472f8fd37fd20d3adb497e18"
+  },
+  "environment": {
+    "hardware": "MacBook Air Mac14,2, Apple M2, 8 GiB unified memory",
+    "operating_system": "macOS 26.6.2 build 25G83",
+    "storage": "active runtime artifact on internal APFS Apple Fabric storage",
+    "cache_state": "empty stable cache, F_NOCACHE expert reads",
+    "host_state": "Safari/WebKit and VS Code were absent from the pre-run process snapshot but present after completion. WebKit processes alone then occupied about 800 MB RSS, so the swap delta cannot be attributed solely to vference."
+  },
+  "workload": {
+    "prompt_mode": "synthetic repeated raw tokens",
+    "prompt_tokens": 16128,
+    "generated_tokens": 256,
+    "total_tokens": 16384,
+    "sampler": "greedy",
+    "canonical_compact_output_token_json_sha256": "d8a420894c3c590906d613a64f8228b9008a0a5016e5537b637918f7ffd486b4"
+  },
+  "configuration": {
+    "memory_budget_bytes": 3221225472,
+    "requested_prefill_capacity": 320,
+    "selected_prefill_capacity": 235,
+    "decode_capacity": 320,
+    "prefill_policy": "global",
+    "decode_policy": "layer",
+    "prefill_chunk_size": 512,
+    "clear_allocator_cache_between_chunks": true,
+    "demand_workers": 8,
+    "prefetch_policy": "adaptive_cross",
+    "prefetch_budget": 2,
+    "prefetch_min_observations": 8
+  },
+  "capacity_plan": {
+    "minimum_capacity": 8,
+    "maximum_capacity": 235,
+    "selected_capacity": 235,
+    "estimated_prefill_peak_bytes": 3220136072,
+    "admitted": true,
+    "decode_restore_estimated_peak_bytes": 2833670280,
+    "decode_restore_admitted": true
+  },
+  "result": {
+    "completed": true,
+    "prefill_seconds": 380.5645843750099,
+    "time_to_first_token_seconds": 380.6762661660323,
+    "decode_tokens_per_second": 2.0540015733369583,
+    "decode_latency_seconds": {"mean": 0.4868545443104927, "p50": 0.4777132910094224, "p95": 0.6676015839911997, "max": 0.9087226249976084},
+    "prefill_demand_bytes": 249398231040,
+    "prefill_pread_seconds": 150.119288172,
+    "prefill_expert_execute_seconds": 364.584328524,
+    "decode_demand_bytes": 99424862208,
+    "decode_prefetch_bytes": 18970509312,
+    "decode_physical_bytes": 118395371520,
+    "decode_pread_seconds": 76.773844844,
+    "decode_expert_execute_seconds": 116.06042800799997,
+    "mlx_peak_bytes": 3075901594,
+    "decode_mlx_peak_bytes": 2488333996,
+    "process_rss_high_water_bytes": 1921368064,
+    "model_state_bytes": 399933440,
+    "swap_before_bytes": 1259864064,
+    "swap_after_bytes": 3213426688,
+    "swap_delta_bytes": 1953562624
+  },
+  "decision": {
+    "functional_result": "The capacity controller successfully shrank prefill to 235 slots, completed 16K, restored 320 decode slots, and remained above 2 tok/s.",
+    "qualification": "Rejected as a no-swap qualification because swap occupancy grew 1.95 GB while the external application set changed during the run.",
+    "next_action": "Keep optional applications closed for the next controlled run and proceed directly to 32K. Do not repeat 16K if the larger clean context point passes."
+  }
+}
