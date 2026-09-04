@@ -99,6 +99,20 @@ _RUNTIME_ADAPTERS: dict[str, RuntimeArchitectureAdapter] = {
 }
 
 
+@dataclass
+class LoadedStreamingModel:
+    """Resident model/store bundle reusable across independent requests."""
+
+    artifact: Path
+    model: Model
+    tokenizer: object
+    store: SynchronousExpertStore
+    adapter: RuntimeArchitectureAdapter
+
+    def close(self) -> None:
+        self.store.close()
+
+
 def runtime_adapter_for_artifact(artifact: Path) -> RuntimeArchitectureAdapter:
     manifest = json.loads((artifact / "manifest.json").read_text())
     name = manifest.get("architecture_adapter")
@@ -187,11 +201,11 @@ def load_streaming_qwen(
 def load_streaming_model(
     artifact: Path,
     **kwargs: object,
-) -> tuple[Model, object, SynchronousExpertStore, RuntimeArchitectureAdapter]:
+) -> LoadedStreamingModel:
     """Resolve the artifact's adapter, then load its qualified execution path."""
     artifact = artifact.resolve()
     adapter = runtime_adapter_for_artifact(artifact)
     if adapter.name != "qwen3_5_moe":
         raise ValueError(f"no model loader is registered for adapter: {adapter.name}")
     model, tokenizer, store = load_streaming_qwen(artifact, **kwargs)
-    return model, tokenizer, store, adapter
+    return LoadedStreamingModel(artifact, model, tokenizer, store, adapter)

@@ -22,7 +22,7 @@ from .runtime.verify import (
 )
 from .runtime.generate import generate_greedy
 from .runtime.integrity import verify_artifact_integrity
-from .runtime.model import runtime_adapter_for_artifact
+from .runtime.model import load_streaming_model, runtime_adapter_for_artifact
 from .native import extension
 from .system import mount_info, print_json
 
@@ -235,63 +235,85 @@ def _stream_generate(args: argparse.Namespace) -> None:
 
 def _chat(args: argparse.Namespace) -> None:
     messages: list[dict[str, str]] = []
-    print("vference chat — /reset clears history, /quit exits", file=sys.stderr)
-    while True:
-        try:
-            prompt = input("you> ").strip()
-        except (EOFError, KeyboardInterrupt):
-            print(file=sys.stderr)
-            return
-        if not prompt:
-            continue
-        if prompt in {"/quit", "/exit"}:
-            return
-        if prompt == "/reset":
-            messages.clear()
-            print("history cleared", file=sys.stderr)
-            continue
-        messages.append({"role": "user", "content": prompt})
-        try:
-            result = generate_greedy(
-                args.artifact,
-                prompt,
-                messages=messages,
-                max_tokens=args.max_tokens,
-                cache_capacity=args.cache_capacity,
-                chat_template=True,
-                enable_thinking=args.thinking,
-                nocache=args.nocache,
-                store_kind="stable",
-                prefill_chunk_size=512,
-                cache_policy="global",
-                decode_cache_policy="layer",
-                clear_cache_between_prefill_chunks=True,
-                max_mlx_memory_bytes=(
-                    int(args.max_mlx_memory_gib * 1024**3)
-                    if args.max_mlx_memory_gib is not None
-                    else None
-                ),
-                prefetch_policy="none",
-                demand_workers=8,
-                auto_cache_capacity=True,
-                temperature=args.temperature,
-                top_p=args.top_p,
-                top_k=args.top_k,
-                seed=args.seed,
+    print("loading resident runtime...", file=sys.stderr)
+    runtime = load_streaming_model(
+        args.artifact,
+        cache_capacity=args.cache_capacity,
+        nocache=args.nocache,
+        trace_routes=False,
+        store_kind="stable",
+        cache_policy="global",
+        prefetch_policy="none",
+        demand_workers=8,
+    )
+    try:
+        print("vference chat — /reset clears history, /quit exits", file=sys.stderr)
+        while True:
+            try:
+                prompt = input("you> ").strip()
+            except (EOFError, KeyboardInterrupt):
+                print(file=sys.stderr)
+                return
+            if not prompt:
+                continue
+            if prompt in {"/quit", "/exit"}:
+                return
+            if prompt == "/reset":
+                messages.clear()
+                print("history cleared", file=sys.stderr)
+                continue
+            messages.append({"role": "user", "content": prompt})
+            try:
+                result = generate_greedy(
+                    args.artifact,
+                    prompt,
+                    messages=messages,
+                    loaded_runtime=runtime,
+                    max_tokens=args.max_tokens,
+                    cache_capacity=args.cache_capacity,
+                    chat_template=True,
+                    enable_thinking=args.thinking,
+                    nocache=args.nocache,
+                    store_kind="stable",
+                    prefill_chunk_size=512,
+                    cache_policy="global",
+                    decode_cache_policy="layer",
+                    clear_cache_between_prefill_chunks=True,
+                    max_mlx_memory_bytes=(
+                        int(args.max_mlx_memory_gib * 1024**3)
+                        if args.max_mlx_memory_gib is not None
+                        else None
+                    ),
+                    prefetch_policy="none",
+                    demand_workers=8,
+                    auto_cache_capacity=True,
+                    temperature=args.temperature,
+                    top_p=args.top_p,
+                    top_k=args.top_k,
+                    seed=args.seed,
+                )
+            except Exception as error:
+                messages.pop()
+                print(f"request failed: {error}", file=sys.stderr)
+                continue
+            response = str(result["output_text"])
+            print(f"assistant> {response}")
+            messages.append({"role": "assistant", "content": response})
+            if args.session_log is not None:
+                args.session_log.parent.mkdir(parents=True, exist_ok=True)
+                with args.session_log.open("a") as handle:
+                    handle.write(json.dumps(result, separators=(",", ":")) + "\n")
+            swap_delta_mib = result["system_swap_bytes"]["delta"] / 1024**2
+            mlx_peak_gib = result["mlx_peak_bytes"] / 1024**3
+            print(
+                f"[{result['prompt_tokens']} prompt tokens; "
+                f"{len(result['output_tokens'])} output tokens; "
+                f"{result['decode_tokens_per_second'] or 0:.3f} decode tok/s; "
+                f"{mlx_peak_gib:.3f} GiB MLX peak; {swap_delta_mib:+.1f} MiB swap]",
+                file=sys.stderr,
             )
-        except Exception as error:
-            messages.pop()
-            print(f"request failed: {error}", file=sys.stderr)
-            continue
-        response = str(result["output_text"])
-        print(f"assistant> {response}")
-        messages.append({"role": "assistant", "content": response})
-        print(
-            f"[{result['prompt_tokens']} prompt tokens; "
-            f"{len(result['output_tokens'])} output tokens; "
-            f"{result['decode_tokens_per_second'] or 0:.3f} decode tok/s]",
-            file=sys.stderr,
-        )
+    finally:
+        runtime.close()
 
 
 def _multi_turn_verify(args: argparse.Namespace) -> None:
@@ -477,6 +499,11 @@ def build_parser() -> argparse.ArgumentParser:
     chat_parser.add_argument("--top-p", type=float, default=1.0)
     chat_parser.add_argument("--top-k", type=int, default=0)
     chat_parser.add_argument("--seed", type=int, default=0)
+    chat_parser.add_argument(
+        "--session-log",
+        type=Path,
+        help="append complete per-turn telemetry as JSONL",
+    )
     chat_parser.set_defaults(func=_chat)
 
     multi_turn_parser = commands.add_parser("multi-turn-verify")

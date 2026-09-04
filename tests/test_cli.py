@@ -43,6 +43,7 @@ def test_chat_defaults_to_qualified_stateless_configuration() -> None:
     assert args.cache_capacity == 320
     assert args.max_tokens == 256
     assert args.nocache
+    assert args.session_log is None
 
 
 def test_doctor_defaults_to_cached_integrity_check() -> None:
@@ -57,15 +58,27 @@ def test_chat_rerenders_complete_transcript_each_turn(monkeypatch) -> None:
     calls = []
     outputs = iter(["answer one", "answer two"])
 
+    class FakeRuntime:
+        closed = False
+
+        def close(self):
+            self.closed = True
+
+    runtime = FakeRuntime()
+
     monkeypatch.setattr(builtins, "input", lambda _: next(prompts))
+    monkeypatch.setattr(cli, "load_streaming_model", lambda *args, **kwargs: runtime)
 
     def fake_generate(*args, **kwargs):
+        assert kwargs["loaded_runtime"] is runtime
         calls.append(deepcopy(kwargs["messages"]))
         return {
             "output_text": next(outputs),
             "prompt_tokens": 10,
             "output_tokens": [1],
             "decode_tokens_per_second": 2.5,
+            "mlx_peak_bytes": 2 * 1024**3,
+            "system_swap_bytes": {"delta": 0},
         }
 
     monkeypatch.setattr(cli, "generate_greedy", fake_generate)
@@ -80,3 +93,4 @@ def test_chat_rerenders_complete_transcript_each_turn(monkeypatch) -> None:
             {"role": "user", "content": "second"},
         ],
     ]
+    assert runtime.closed

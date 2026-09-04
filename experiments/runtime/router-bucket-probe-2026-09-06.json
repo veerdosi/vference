@@ -1,0 +1,48 @@
+{
+  "experiment": "Lazy-schedule router/deferred-MLX timing attribution probe",
+  "recorded_at_local": "2026-09-06T00:00:00+08:00",
+  "classification": "single representative instrumentation probe; not a qualification benchmark",
+  "purpose": "Separate host-side stable-slot work from the existing router_and_graph_wait timer without inserting extra MLX fences.",
+  "environment": {
+    "hardware": "MacBook Air Mac14,2, Apple M2, 8 GiB unified memory",
+    "artifact": "mlx-community/Qwen3.5-35B-A3B-4bit at 1e20fd8d42056f870933bf98ca6211024744f7ec",
+    "expert_pack_sha256": "9b26ebdf13a2863d607e1c3ea6e2528ff0267b7f472f8fd37fd20d3adb497e18",
+    "mlx": "0.32.2",
+    "mlx_lm": "0.31.3"
+  },
+  "command": "uv run vference stream-generate artifacts/qwen3.5-35b-a3b-4bit-runtime --prompt 'Explain why exact expert routing must wait for the selected weights.' --raw-prompt --max-tokens 16 --store stable --cache-capacity 320 --cache-policy global --decode-cache-policy layer --demand-workers 8 --prefetch-policy none --nocache",
+  "instrumentation": {
+    "source": "src/vference/runtime/expert_store.py and src/vference/runtime/generate.py",
+    "method": "perf_counter_ns around existing stage boundaries; no new mx.eval call was added",
+    "critical_limit": "mx.eval(indices) necessarily settles both exact router IDs and deferred MLX predecessors, so it is not a router-only measurement."
+  },
+  "decode": {
+    "prompt_tokens": 13,
+    "output_tokens": 16,
+    "decode_model_calls": 15,
+    "moe_layer_calls": 600,
+    "decode_tokens_per_second": 2.7469153571052285,
+    "swap_delta_bytes": -8388608,
+    "timing_seconds": {
+      "execute_total": 5.215317553,
+      "pread": 3.4873948370000005,
+      "slot_resolve": 3.523741851,
+      "slot_resolution_wall_remainder_after_pread": 0.03634701399999956,
+      "indices_eval_router_and_deferred_mlx": 1.670794327,
+      "host_indices_copy": 0.003946578,
+      "route_bookkeeping": 0.007018715,
+      "expert_graph_build": 0.006284883,
+      "prefetch_prediction": 0.00023112200000000003,
+      "forced_group_eval": 0.0,
+      "final_logits_eval": 0.20811020792461932
+    }
+  },
+  "interpretation": {
+    "dominant_non_io_visible_stage": "indices_eval_router_and_deferred_mlx",
+    "not_separable_without_schedule_perturbation": [
+      "router softmax and top-8 selection compute",
+      "deferred MLX work preceding index materialization"
+    ],
+    "not_a_claim": "This short, host-state-sensitive probe neither replaces the accepted 8K result nor establishes a kernel speedup."
+  }
+}

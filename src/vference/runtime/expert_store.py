@@ -102,6 +102,16 @@ class SynchronousExpertStore:
         self.materialize_ns = 0
         self.router_wait_ns = 0
         self.execute_ns = 0
+        # These are intentionally stage timings, not claims of independent GPU
+        # costs.  In the lazy MLX schedule ``mx.eval(indices)`` settles both the
+        # router and deferred predecessors, so it cannot be called router-only.
+        self.indices_eval_ns = 0
+        self.host_indices_ns = 0
+        self.route_bookkeeping_ns = 0
+        self.slot_resolve_ns = 0
+        self.expert_graph_build_ns = 0
+        self.predict_ns = 0
+        self.forced_group_eval_ns = 0
         self.layer_stats = [
             {"hits": 0, "misses": 0, "read_ns": 0, "materialize_ns": 0}
             for _ in range(self.layer_count)
@@ -289,6 +299,13 @@ class SynchronousExpertStore:
                 "materialize": self.materialize_ns / 1_000_000_000,
                 "router_and_graph_wait": self.router_wait_ns / 1_000_000_000,
                 "execute_total": self.execute_ns / 1_000_000_000,
+                "indices_eval": self.indices_eval_ns / 1_000_000_000,
+                "host_indices_copy": self.host_indices_ns / 1_000_000_000,
+                "route_bookkeeping": self.route_bookkeeping_ns / 1_000_000_000,
+                "slot_resolve": self.slot_resolve_ns / 1_000_000_000,
+                "expert_graph_build": self.expert_graph_build_ns / 1_000_000_000,
+                "prefetch_prediction": self.predict_ns / 1_000_000_000,
+                "forced_group_eval": self.forced_group_eval_ns / 1_000_000_000,
             },
             "per_layer": [
                 {
@@ -412,6 +429,15 @@ class StableSlotExpertStore(SynchronousExpertStore):
         self.materialize_ns = 0
         self.router_wait_ns = 0
         self.execute_ns = 0
+        # See the corresponding fields in SynchronousExpertStore: these make
+        # lazy-schedule timing visible without turning it into eager fences.
+        self.indices_eval_ns = 0
+        self.host_indices_ns = 0
+        self.route_bookkeeping_ns = 0
+        self.slot_resolve_ns = 0
+        self.expert_graph_build_ns = 0
+        self.predict_ns = 0
+        self.forced_group_eval_ns = 0
         self.layer_stats = [
             {"hits": 0, "misses": 0, "read_ns": 0, "materialize_ns": 0}
             for _ in range(self.layer_count)
@@ -913,8 +939,13 @@ class StableSlotExpertStore(SynchronousExpertStore):
         execute_started = time.perf_counter_ns()
         wait_started = time.perf_counter_ns()
         mx.eval(indices)
-        self.router_wait_ns += time.perf_counter_ns() - wait_started
+        indices_eval_ns = time.perf_counter_ns() - wait_started
+        self.router_wait_ns += indices_eval_ns
+        self.indices_eval_ns += indices_eval_ns
+        host_indices_started = time.perf_counter_ns()
         host_indices = np.asarray(indices, dtype=np.int64)
+        self.host_indices_ns += time.perf_counter_ns() - host_indices_started
+        bookkeeping_started = time.perf_counter_ns()
         if self.cache_policy == "demand":
             self._cache.clear()
             self._slot_keys = [None] * self.capacity
@@ -931,9 +962,15 @@ class StableSlotExpertStore(SynchronousExpertStore):
 
         unique_count = len(set(int(value) for value in host_indices.reshape(-1)))
         working_capacity = self._layer_capacities.get(layer_id, self.capacity)
+        self.route_bookkeeping_ns += time.perf_counter_ns() - bookkeeping_started
         if unique_count <= working_capacity:
-            local = mx.array(self._resolve_slots(layer_id, host_indices))
+            resolve_started = time.perf_counter_ns()
+            local_host = self._resolve_slots(layer_id, host_indices)
+            self.slot_resolve_ns += time.perf_counter_ns() - resolve_started
+            local = mx.array(local_host)
+            graph_started = time.perf_counter_ns()
             output = self._execute_loaded(x, local)
+            self.expert_graph_build_ns += time.perf_counter_ns() - graph_started
         else:
             flat_x = x.reshape(-1, x.shape[-1])
             flat_indices = host_indices.reshape(-1, host_indices.shape[-1])
@@ -953,17 +990,26 @@ class StableSlotExpertStore(SynchronousExpertStore):
                         "cache partition cannot hold one token's exact routed experts"
                     )
                 local_host = flat_indices[start:end].reshape(1, end - start, -1)
-                local = mx.array(self._resolve_slots(layer_id, local_host))
+                resolve_started = time.perf_counter_ns()
+                resolved_slots = self._resolve_slots(layer_id, local_host)
+                self.slot_resolve_ns += time.perf_counter_ns() - resolve_started
+                local = mx.array(resolved_slots)
+                graph_started = time.perf_counter_ns()
                 group_output = self._execute_loaded(
                     flat_x[start:end].reshape(1, end - start, -1), local
                 )
+                self.expert_graph_build_ns += time.perf_counter_ns() - graph_started
                 # The next group may overwrite these slots, so settle this graph first.
+                group_eval_started = time.perf_counter_ns()
                 mx.eval(group_output)
+                self.forced_group_eval_ns += time.perf_counter_ns() - group_eval_started
                 grouped_outputs.append(group_output.reshape(-1, x.shape[-1]))
                 start = end
             output = mx.concatenate(grouped_outputs, axis=0).reshape(*indices.shape, x.shape[-1])
         self.execute_ns += time.perf_counter_ns() - execute_started
+        predict_started = time.perf_counter_ns()
         self._predict_next(layer_id, host_indices)
+        self.predict_ns += time.perf_counter_ns() - predict_started
         return output
 
     def stats(self) -> dict[str, object]:

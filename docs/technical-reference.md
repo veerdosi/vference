@@ -1518,11 +1518,13 @@ store is the qualified default.
 
 The CLI now also provides `vference chat`. It retains user/assistant messages,
 but each turn re-renders the complete transcript through the qualified one-pass
-path and reloads the runtime rather than reusing Qwen's numerically non-invariant
-incremental state. `/reset` and `/quit` are explicit, and a failed or admission-
-rejected request is removed from the transcript. This is the safe current-
-version chat contract; resident model reuse is a performance refinement, while
-incremental state reuse remains a future correctness project.
+path. The 1.38 GB core and bounded expert store remain resident; only the
+request's Qwen cache/state is rebuilt. This avoids repeated model loads without
+reusing Qwen's numerically non-invariant incremental state. `/reset` and `/quit`
+are explicit, a failed or admission-rejected request is removed from the
+transcript, and optional JSONL session logging retains full per-turn telemetry.
+This is the safe current-version chat contract; incremental state reuse remains
+a future correctness project.
 
 `vference doctor` performs the non-inference preflight: Apple Silicon platform,
 native extension allocation, manifest-selected adapter, cached or forced

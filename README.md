@@ -95,10 +95,12 @@ uv run vference chat artifacts/qwen3.5-35b-a3b-4bit-runtime
 
 Use `/reset` to clear the transcript and `/quit` to exit. Every turn re-renders
 the complete user/assistant transcript and prefills it in one qualified request.
-The current implementation also reloads the model between turns. That costs
-startup time, but it intentionally avoids the deferred incremental-state path
-whose logits are not one-pass exact. Requests that exceed the admitted memory
-envelope fail without adding the unsuccessful turn to history.
+The model and bounded expert store remain resident, while a fresh Qwen state is
+built from the complete transcript each turn. This avoids repeated model loads
+without using the deferred incremental-state path whose logits are not one-pass
+exact. Requests that exceed the admitted memory envelope fail without adding
+the unsuccessful turn to history. Add `--session-log path.jsonl` when complete
+per-turn performance, memory, swap, and expert-cache telemetry should be kept.
 
 The serial-demand predecessor averaged 2.278 decode tok/s across three identical
 8K-total-token runs without swap growth, and a separate 7,936-token needle

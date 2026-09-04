@@ -15,7 +15,7 @@ from .admission import (
     fit_expert_capacity,
     minimum_expert_capacity,
 )
-from .model import Qwen35RuntimeAdapter, load_streaming_model
+from .model import LoadedStreamingModel, Qwen35RuntimeAdapter, load_streaming_model
 from .sampling import make_token_sampler, select_token
 
 DECODE_TRANSIENT_RESERVE_BYTES = 448 * 1024**2
@@ -103,7 +103,19 @@ def _store_stats_delta(before: dict[str, object], after: dict[str, object]) -> d
     result["timing_seconds"] = counters(
         before_timing,
         after_timing,
-        ("pread", "materialize", "router_and_graph_wait", "execute_total"),
+        (
+            "pread",
+            "materialize",
+            "router_and_graph_wait",
+            "execute_total",
+            "indices_eval",
+            "host_indices_copy",
+            "route_bookkeeping",
+            "slot_resolve",
+            "expert_graph_build",
+            "prefetch_prediction",
+            "forced_group_eval",
+        ),
     )
 
     before_prefetch = before.get("prefetch")
@@ -179,6 +191,7 @@ def generate_greedy(
     prompt: str,
     *,
     messages: list[dict[str, str]] | None = None,
+    loaded_runtime: LoadedStreamingModel | None = None,
     max_tokens: int,
     cache_capacity: int,
     chat_template: bool,
@@ -252,20 +265,38 @@ def generate_greedy(
     rss_before = process.memory_info().rss
     memory_before = _memory_snapshot()
     swap_before = psutil.swap_memory()
+    owns_runtime = loaded_runtime is None
     load_started = time.perf_counter()
-    model, tokenizer, store, adapter = load_streaming_model(
-        artifact,
-        cache_capacity=cache_capacity,
-        nocache=nocache,
-        trace_routes=trace_output is not None,
-        store_kind=store_kind,
-        cache_policy=cache_policy,
-        prefetch_policy=prefetch_policy,
-        prefetch_budget=prefetch_budget,
-        prefetch_min_observations=prefetch_min_observations,
-        demand_workers=demand_workers,
-    )
-    load_seconds = time.perf_counter() - load_started
+    if loaded_runtime is None:
+        loaded_runtime = load_streaming_model(
+            artifact,
+            cache_capacity=cache_capacity,
+            nocache=nocache,
+            trace_routes=trace_output is not None,
+            store_kind=store_kind,
+            cache_policy=cache_policy,
+            prefetch_policy=prefetch_policy,
+            prefetch_budget=prefetch_budget,
+            prefetch_min_observations=prefetch_min_observations,
+            demand_workers=demand_workers,
+        )
+        load_seconds = time.perf_counter() - load_started
+    else:
+        if loaded_runtime.artifact != artifact.resolve():
+            raise ValueError("loaded runtime belongs to a different artifact")
+        load_seconds = 0.0
+    model = loaded_runtime.model
+    tokenizer = loaded_runtime.tokenizer
+    store = loaded_runtime.store
+    adapter = loaded_runtime.adapter
+    if store.capacity != cache_capacity:
+        if store_kind != "stable":
+            raise ValueError("reusable Python store capacity cannot be changed")
+        store.resize_capacity(cache_capacity, cache_policy)
+    elif store_kind == "stable" and store.cache_policy != cache_policy:
+        store.set_cache_policy(cache_policy)
+    request_store_stats = store.stats()
+    mx.reset_peak_memory()
     model_ready_at = time.perf_counter()
     memory_after_load = _memory_snapshot()
     try:
@@ -429,10 +460,13 @@ def generate_greedy(
         prefill_started = time.perf_counter()
         logits = None
         prefill_chunks: list[dict[str, int]] = []
+        prefill_logits_eval_seconds = 0.0
         for start in range(0, len(prompt_tokens), prefill_chunk_size):
             chunk = prompt_tokens[start : start + prefill_chunk_size]
             logits = model(mx.array([chunk]), cache=cache)
+            logits_eval_started = time.perf_counter()
             mx.eval(logits)
+            prefill_logits_eval_seconds += time.perf_counter() - logits_eval_started
             store.validate_source_unchanged()
             chunk_memory = {
                 "start_token": start,
@@ -447,6 +481,7 @@ def generate_greedy(
         prefill_seconds = time.perf_counter() - prefill_started
         memory_after_prefill = _memory_snapshot()
         prefill_store_stats = store.stats()
+        prefill_store_delta = _store_stats_delta(request_store_stats, prefill_store_stats)
         prefill_mlx_peak_bytes = mx.get_peak_memory()
 
         transition_started = time.perf_counter()
@@ -469,6 +504,7 @@ def generate_greedy(
 
         output_tokens: list[int] = []
         decode_latencies: list[float] = []
+        decode_logits_eval_seconds = 0.0
         first_token_at: float | None = None
         eos_ids = set(tokenizer.eos_token_ids)
         for step in range(max_tokens):
@@ -482,7 +518,9 @@ def generate_greedy(
                 break
             started = time.perf_counter()
             logits = model(mx.array([[token_id]]), cache=cache)
+            logits_eval_started = time.perf_counter()
             mx.eval(logits)
+            decode_logits_eval_seconds += time.perf_counter() - logits_eval_started
             decode_latencies.append(time.perf_counter() - started)
 
         swap_after = psutil.swap_memory()
@@ -522,13 +560,16 @@ def generate_greedy(
             "output_tokens": output_tokens,
             "output_text": tokenizer.decode(output_tokens),
             "load_seconds": load_seconds,
+            "runtime_reused": not owns_runtime,
             "prefill_seconds": prefill_seconds,
+            "prefill_logits_eval_seconds": prefill_logits_eval_seconds,
             "phase_transition_seconds": phase_transition_seconds,
             "phase_transition_mlx_active_bytes": phase_transition_mlx_active_bytes,
             "phase_transition_mlx_cache_bytes": phase_transition_mlx_cache_bytes,
             "time_to_first_token_seconds": first_token_at - model_ready_at,
             "cold_start_time_to_first_token_seconds": first_token_at - request_started,
             "decode_model_calls": len(decode_latencies),
+            "decode_logits_eval_seconds": decode_logits_eval_seconds,
             "decode_tokens_per_second": (
                 len(decode_latencies) / sum(decode_latencies) if decode_latencies else None
             ),
@@ -536,8 +577,11 @@ def generate_greedy(
                 _latency_summary(decode_latencies) if decode_latencies else None
             ),
             "expert_store": final_store_stats,
+            "expert_store_request": _store_stats_delta(
+                request_store_stats, final_store_stats
+            ),
             "expert_store_phases": {
-                "prefill": prefill_store_stats,
+                "prefill": prefill_store_delta,
                 "decode_delta": _store_stats_delta(prefill_store_stats, final_store_stats),
             },
             "mlx_active_bytes": mx.get_active_memory(),
@@ -584,4 +628,5 @@ def generate_greedy(
             result["trace_output"] = str(trace_output.resolve())
         return result
     finally:
-        store.close()
+        if owns_runtime:
+            loaded_runtime.close()
