@@ -81,8 +81,12 @@ def main() -> None:
     if len(capture.inputs) != 2 or capture.inputs[-1].shape != (1, 1, 2048):
         raise RuntimeError(f"unexpected capture shapes: {[value.shape for value in capture.inputs]}")
 
+    prefill_input_path = output_dir / "prefill-input-fp16.raw"
+    prefill_output_path = output_dir / "prefill-shared-output-fp16.raw"
     input_path = output_dir / "decode-input-fp16.raw"
     output_path = output_dir / "decode-shared-output-fp16.raw"
+    capture.inputs[0].tofile(prefill_input_path)
+    capture.outputs[0].tofile(prefill_output_path)
     capture.inputs[-1].tofile(input_path)
     capture.outputs[-1].tofile(output_path)
     record = {
@@ -101,6 +105,11 @@ def main() -> None:
         "input_sha256": _sha256(input_path),
         "reference_output": output_path.name,
         "reference_output_sha256": _sha256(output_path),
+        "prefill_input_shape": list(capture.inputs[0].shape),
+        "prefill_input": prefill_input_path.name,
+        "prefill_input_sha256": _sha256(prefill_input_path),
+        "prefill_reference_output": prefill_output_path.name,
+        "prefill_reference_output_sha256": _sha256(prefill_output_path),
         "store_stats": store.stats(),
     }
     (output_dir / "capture.json").write_text(json.dumps(record, indent=2, sort_keys=True) + "\n")

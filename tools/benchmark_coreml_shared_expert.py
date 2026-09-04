@@ -165,7 +165,13 @@ def main() -> None:
             "reference_error": {
                 "exact_fp16": bool(
                     np.array_equal(result["output_fp16"].astype(np.float32).reshape(-1), reference)
-                )
+                ),
+                "max_absolute": float(
+                    np.abs(result["output_fp16"].astype(np.float32).reshape(-1) - reference).max()
+                ),
+                "mean_absolute": float(
+                    np.abs(result["output_fp16"].astype(np.float32).reshape(-1) - reference).mean()
+                ),
             },
         }
         for name, result in mlx_results.items()
@@ -192,7 +198,13 @@ def main() -> None:
             ).stdout.splitlines()[0],
         },
         "workload": {
-            "kind": "synthetic deterministic standalone layer input",
+            "kind": (
+                "synthetic deterministic standalone layer input"
+                if manifest.get("input_source") == "synthetic deterministic normal"
+                else "captured live Qwen hidden state"
+            ),
+            "input_source": manifest.get("input_source", "synthetic deterministic normal"),
+            "input_sha256": manifest["input_sha256"],
             "layer": manifest["layer"],
             "shape": list(input_shape),
             "seed": manifest["seed"],
@@ -215,7 +227,7 @@ def main() -> None:
         "decision": {
             "status": "placement and microbenchmark evidence only; not integrated",
             "quality": "Core ML output is not bit-identical to MLX BF16 quantized matmul, so it cannot become a default path without downstream route/logit/token qualification.",
-            "next_action": "Capture real hidden states, measure asynchronous overlap with exact expert I/O, and reject unless end-to-end behavior and correctness gates pass.",
+            "next_action": "Measure asynchronous overlap with exact expert I/O and reject unless end-to-end behavior and correctness gates pass.",
         },
     }
     encoded = json.dumps(benchmark, indent=2, sort_keys=True) + "\n"
