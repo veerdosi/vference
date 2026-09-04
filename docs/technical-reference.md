@@ -719,6 +719,29 @@ hypothesis to asynchronous overlap with routed-expert I/O; simply replacing the
 MLX call synchronously would be a regression. See
 `experiments/runtime/stage7-coreml-shared-expert-real-2026-09-04.json`.
 
+The 512-token prefill bucket did produce a substantial branch-local ANE win:
+CPU+ANE was 0.706 ms p50 versus 2.646 ms for MLX BF16 qmm, or 3.75 times
+faster. It remained numerically different (0.010254 maximum absolute error on
+the synthetic input). The branch-local result is nevertheless too small to
+justify integration on this target. Thirty-two 512-token chunks across 40
+layers imply at most 1,280 calls for the measured 16K prompt; applying the
+entire measured per-call saving yields a deliberately optimistic 2.484-second
+saving, only 0.50% of its 501.23-second prefill. For its 198-call decode, even
+perfectly hiding all 40 MLX shared branches would remove only about 1.542
+seconds, 1.96% of decode wall time. These are derived upper bounds, not
+integrated measurements.
+
+Meanwhile, one CPU+ANE model added 11,911,168 bytes of RSS after load. Naively
+multiplying that isolated delta across 40 layer-specific models gives about
+454 MiB, before integration buffers, while the dense packages total about 240
+MiB. A shared asset or compressed representation could reduce duplication but
+cannot raise the branch's best-case runtime share. The shared-expert Core ML
+integration is therefore rejected for the 8 GB target. This is not a rejection
+of ANE: it proves the toolchain and placement work, while directing the next
+experiment toward a larger fixed-shape resident subgraph with enough measured
+runtime share to produce a material end-to-end gain. Full prefill evidence is
+in `experiments/runtime/stage7-coreml-shared-expert-prefill-2026-09-04.json`.
+
 ## 8. Correctness and quality qualification
 
 ### 8.1 Reference hierarchy
