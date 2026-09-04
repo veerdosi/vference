@@ -5,11 +5,11 @@ sparse Mixture-of-Experts models larger than unified memory on Apple Silicon.
 Qwen3.5-35B-A3B on an 8 GB M2 MacBook Air is the first architecture adapter and
 validation target, not the intended permanent scope.
 
-The project has completed the lossless Stage 1 artifact build and internal-SSD
-storage baseline. The Stage 2 runtime loads the 1.38 GB resident core and
-streams exact experts into a bounded cache. Both the Python reference cache and
-the native stable-slot cache generate with Qwen; sustained qualification and
-further scheduling work remain in progress. Start with
+The project has completed the lossless artifact build, exact streamed-expert
+runtime, asynchronous demand path, and current-version long-context
+qualification. The runtime loads the 1.38 GB resident core and streams exact
+experts into a bounded cache. Both the Python reference cache and the native
+stable-slot cache generate with Qwen. Start with
 [the technical reference](docs/technical-reference.md). It records the model
 facts, memory and I/O arithmetic, proposed runtime architecture, quality
 invariants, validation gates, risks, and staged implementation plan.
@@ -48,8 +48,8 @@ uv run vference stream-generate artifacts/qwen3.5-35b-a3b-4bit-runtime \
   --demand-workers 8 --nocache
 ```
 
-It remains experimental while broader context, session-boundary, and release
-reliability work continues; the current 8K throughput and no-swap gate passes.
+It remains experimental while heterogeneous-compute and release-reliability
+work continues; the current 8K throughput and no-swap gate passes.
 
 For the current 8 GB long-context feasibility configuration, use 320 slots and
 bound allocator caching between prefill chunks:
@@ -81,6 +81,24 @@ the measured queue-depth-eight ceiling of the internal artifact path.
 The CLI therefore defaults the stable store to eight demand workers; use
 `--demand-workers 1` only when deliberately reproducing the serial baseline.
 
+Stage 5 is complete for the current-version scope. Context support has three
+measured tiers on the 8 GB M2 Air:
+
+- **8K strict:** 2.523 decode tok/s, 2.903 GB peak MLX memory, and zero swap
+  growth on the qualified 7,936-prompt/256-output workload.
+- **16K practical extended:** a heterogeneous 16,128-token document prompt
+  completed in 501.2 seconds of prefill and decoded at 2.520 tok/s. Peak MLX
+  memory was 3.076 GB (2.865 GiB); system-wide swap grew 136 MiB.
+- **32K rejected for this version:** the exact 512-token-chunk path had not
+  completed prefill after about 52 minutes and grew swap by about 1.10 GiB.
+
+The 16K run was successful; its small positive swap delta is why it is an
+extended mode rather than the stricter zero-swap tier. A representative
+document caused 80.3% more prefill expert reads than repeated text, so long-
+context TTFT claims must use realistic content. Use `--prompt-file` with
+`--truncate-raw-prompt-to-tokens` and `--raw-prompt-suffix` for reproducible
+bounded document workloads.
+
 Runtime artifacts are checked automatically before model load. The first use
 hashes every manifest-listed payload and support file; later runs use a
 file-identity-bound stamp and rehash automatically if anything changed. To
@@ -107,12 +125,12 @@ incurred a 66.9% miss rate and 43.2 GB of demand reads while constantly
 evicting and splitting prefill working sets, yet still matched every reference
 logit and output token without swap growth.
 
-Incremental multi-turn cache reuse is not a qualified default yet. Stable and
+Incremental multi-turn cache reuse is deferred to a future version. Stable and
 Python expert stores match each other exactly under split-state updates, but
 the pinned Qwen/MLX split execution differs numerically from one-pass prefill
 (0.7109 maximum initial-logit error in the first boundary probe). Its 64 greedy
-tokens still matched; a broader boundary corpus is required before exposing a
-session API that promises invariant outputs.
+tokens still matched. The current safe behavior is stateless transcript
+inference: render the complete conversation and prefill it as one request.
 
 `--decode-cache-capacity` can replace the stable expert pool at the synchronized
 prefill/decode boundary when a different phase budget is explicitly desired.
@@ -152,3 +170,15 @@ chunk changed the output sequence even with prefetch disabled and is rejected
 until chunk-boundary invariance is fixed. Non-512 multi-chunk generation
 therefore requires the explicit experimental
 `--allow-unqualified-prefill-chunk-size` override.
+
+BF16-versus-4-bit quality evaluation and custom quantization are also deferred
+to a future version. The current evidence proves that vference preserves the
+pinned 4-bit artifact's computation; it does not claim that the artifact is
+quality-equivalent to BF16. Do not download the BF16 checkpoint until that
+evaluation is deliberately resumed.
+
+Core ML/ANE exploration remains an explicit differentiating workstream. Only
+fixed/enumerated-shape subgraphs that Core ML actually places profitably on the
+Neural Engine are candidates. A candidate must preserve the qualified output
+and improve end-to-end latency or energy after transfer and synchronization
+costs; MLX/Metal remains the path for irregular MoE routing and decode.

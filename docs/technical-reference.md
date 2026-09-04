@@ -3,8 +3,8 @@
 Status: architecture/feasibility reference  
 Initial architecture adapter and validation target: Qwen3.5-35B-A3B, text-only,
 batch 1, Apple M2 MacBook Air with 8 GB unified memory  
-Primary execution stack: MLX/Metal; Core ML is an optional, separately proven
-acceleration path
+Primary execution stack: MLX/Metal; Core ML/ANE is a separately qualified
+acceleration workstream and intended product differentiator
 
 This document is the source of truth for the initial design. Future agents
 should update facts in place, add dates and source revisions when upstream
@@ -77,9 +77,10 @@ user that BF16 is now required, and give them the command to download it.
 The BF16 checkpoint is a later quality/conversion source;
 it is not the artifact the 8 GB runtime will keep resident or stream directly.
 
-The first release is text-only, single-request, batch-1 inference. Vision, MTP, training, and ANE acceleration are follow-on work. This
-ordering matters: each adds independent memory, correctness, and scheduling
-variables that would obscure whether expert streaming itself works.
+The first release is text-only, single-request, batch-1 inference. Vision, MTP,
+and training are follow-on work. Core ML/ANE acceleration starts after the
+exact MLX baseline and Stage 5 context envelope are fixed, so its end-to-end
+effect and numerical behavior can be isolated rather than guessed.
 
 This is not ordinary virtual-memory oversubscription. Letting macOS page a full
 MLX model implicitly gives neither predictable eviction nor a protected state
@@ -583,8 +584,9 @@ weights never materialized as a full FP16 expert.
 
 ## 7. Core ML and the Neural Engine
 
-Core ML is an experiment after the MLX/Metal baseline, not a premise required
-for feasibility. Apple exposes ANE through Core ML compute-unit choices; there
+Core ML/ANE is a separately qualified acceleration workstream after the
+MLX/Metal baseline, not a premise required for basic feasibility. Apple
+exposes ANE through Core ML compute-unit choices; there
 is no supported public API for arbitrary ANE kernels. `MLComputeUnits.all` lets
 Core ML choose CPU/GPU/ANE, while `cpuAndNeuralEngine` excludes the GPU but still
 does not promise that every operation executes on ANE. Core ML dynamically
@@ -968,8 +970,11 @@ A storage/scheduler change is releasable only if:
   stochastic generation with identical logits/tolerances;
 - results are invariant across forced cache capacities, forced 100% misses,
   delayed I/O, cache warm/cold states, and disabled prefetch;
-- prefill chunk sizes produce the same tokens and within-tolerance states;
-- long-context, multi-turn prefix/state handling matches reference behavior;
+- every prefill chunk size exposed as a supported mode produces the same router
+  decisions, tokens, and within-tolerance states; the current Qwen adapter
+  supports only 512-token multi-chunk prefill;
+- every session-state mode exposed as supported matches reference behavior;
+  incremental state reuse is not part of the current-version surface;
 - corruption, short reads, failed digests, and out-of-memory conditions fail
   explicitly rather than producing output.
 
@@ -1079,20 +1084,17 @@ broader live and pressure cases remain.
 ### Stage 5 — bounded prefill and long contexts
 
 Implement expert-major chunked prefill, state reservation, context admission,
-and multi-turn correctness. Publish separate TTFT and decode profiles at 4K,
-8K, 16K, 32K, and the largest safely admitted context. **In progress:** exact
-working-set splitting, phase-specific cache policies, and allocator cleanup are
-implemented. One synthetic 8K-total/256-output workload cleared the absolute
-throughput and no-swap gate in three repetitions, and a separate 7,936-token
-needle-retrieval case passed. Exact Qwen state accounting and measured-profile
-admission are implemented. The first multi-turn split-state reference and a
-five-domain deterministic corpus pass exactly. Same-context baseline
-performance clears both frozen 10% improvement thresholds. Broader cases such
-as tool calls, schemas, corruption/failure injection, and stochastic sampling
-now pass their initial exact-reference corpora, as does a forced minimum-
-capacity live churn trace. The first four-path multi-turn boundary check keeps
-all 64 output tokens but exposes non-exact upstream split-state logits, so
-broader live multi-turn state reuse remains provisional.
+and long-context behavior. **Complete for the current-version scope:** exact
+working-set splitting, phase-specific cache policies, allocator cleanup, and
+measured-profile admission are implemented. The capacity planner reduces a
+requested 320-slot pool to 235 slots for 16K prefill, then safely restores 320
+layer-policy slots for decode. The accepted 8K workload clears the absolute
+throughput and strict no-swap gate, while a representative 16K workload defines
+the practical extended tier. The current version deliberately supports
+stateless rendered-transcript inference and the exact 512-token multi-chunk
+Qwen prefill shape. Incremental multi-turn state reuse and smaller-chunk state
+equivalence are future-version work, not unfinished release gates for this
+scope.
 
 A 256-token prefill-chunk experiment is explicitly rejected even though it
 reduced peak MLX memory from 2.903 GB to 2.553 GB and decoded at 2.471 tok/s.
@@ -1112,6 +1114,9 @@ divergence that becomes user-visible later.
 The generation entry point now rejects a non-512 multi-chunk Qwen prefill by
 default. `--allow-unqualified-prefill-chunk-size` exists only for explicit
 correctness experiments such as the verifier; it is not a performance mode.
+Kernel/state work to make 256-token chunks exact is deferred to a future
+version. No current optimization may adopt that lower-memory shape until its
+router decisions and model outputs match the qualified execution.
 
 A phase-separated profile of the selected 320-slot, confidence-gated
 two-record prefetch policy then attributed the 8K decode ceiling. Over 255
@@ -1182,18 +1187,65 @@ future policies, while this 8 GB configuration continues to use 320 slots in
 both phases. Full evidence, including the rejected native lifetime design, is
 in `experiments/runtime/stage5-phase-cache-resize-2026-09-01.json`.
 
+The final Stage 5 context classification is:
+
+- **8K strict tier:** the 7,936-token prompt plus 256-token output preserved
+  the canonical output hash, sustained 2.523 decode tok/s, peaked at 2.903 GB
+  MLX memory, and produced zero swap growth.
+- **16K practical extended tier:** a heterogeneous 16,128-token document
+  prompt completed successfully, generated a parseable four-key JSON answer,
+  and terminated normally at EOS after 199 tokens. Prefill/TTFT was
+  501.23/501.47 seconds, decode sustained 2.520 tok/s, peak MLX memory was
+  3,075,932,354 bytes (2.865 GiB), and system-wide swap occupancy grew
+  142,802,944 bytes (136.19 MiB). The positive swap delta is a recorded caveat,
+  not a functional failure; 16K satisfies the accepted 3.75–4 GiB peak-memory
+  criterion but is not labeled zero-swap.
+- **32K rejected for this version:** the current exact 512-token-chunk path had
+  not completed prefill after approximately 3,130 seconds and grew swap by
+  approximately 1.10 GiB. Its planner had already reduced the prefill pool to
+  45 slots. Waiting longer could not make that TTFT usable.
+- **64K not run:** 32K was already unusable, and the measured-profile planner
+  cannot fit the current 512-token transient plus even the minimum eight expert
+  slots inside the 3 GiB runtime budget. Running it would add no decision
+  evidence. A separate 4K rerun was also unnecessary after the larger 8K tier
+  passed the strict gate.
+
+Prompt content materially affects prefill cost. The heterogeneous 16K document
+caused 254,135 misses and 449,684,766,720 demand bytes, versus 140,945 misses
+and 249,398,231,040 bytes for the repeated-token control: 80.31% more traffic.
+Representative content is therefore required for long-context TTFT claims;
+repeated text remains useful only as a controlled synthetic case. The complete
+16K record is
+`experiments/runtime/stage5-context-16k-document-2026-09-04.json`; the rejected
+32K observation is
+`experiments/runtime/stage5-context-32k-rejected-2026-09-04.json`.
+
+The current application contract re-renders and prefills the full transcript
+for each request. Incremental multi-turn reuse is deferred because the pinned
+Qwen/MLX split-state execution has already shown non-exact logits relative to
+one-pass prefill, even though the first observed token sequence matched. This
+restriction preserves the runtime correctness invariant rather than weakening
+it.
+
 ### Stage 6 — quantization experiments
 
-Only now notify the user that the official BF16 checkpoint is required and ask
-before downloading it. Then explore asymmetric precision or perform proper
-BF16-versus-4-bit quality evaluation. Qualify each artifact against BF16 and
-keep runtime comparisons fixed to the artifact.
+**Deferred to a future version.** When deliberately resumed, first notify the
+user that the official BF16 checkpoint is required and ask before downloading
+it. Then explore asymmetric precision or perform proper BF16-versus-4-bit
+quality evaluation. Qualify each artifact against BF16 and keep runtime
+comparisons fixed to the artifact. Until then, the project claims exact runtime
+equivalence to the pinned 4-bit artifact, not quality parity with BF16.
 
 ### Stage 7 — Core ML/ANE experiments
 
 Profile fixed/enumerated-shape subgraphs, inspect actual placement, and retain
-only end-to-end wins that fit memory and pass correctness. The product remains
-functional if no ANE candidate wins.
+only end-to-end wins that fit memory and pass correctness. This is an explicit
+post-Stage-5 differentiating workstream: begin with fixed-shape candidates that
+can run independently of irregular expert routing, measure transfer and
+synchronization overhead, verify actual Core ML compute-unit placement, and
+compare full-pipeline latency and energy against MLX/Metal. No candidate may
+change router decisions, logits outside the accepted numerical tolerance, or
+generated output. The product remains functional if no ANE candidate wins.
 
 ## 11. Main risks and falsification tests
 

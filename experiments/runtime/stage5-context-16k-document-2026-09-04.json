@@ -1,0 +1,111 @@
+{
+  "experiment": "Representative heterogeneous 16K context qualification",
+  "recorded_at_local": "2026-09-04T19:00:00+08:00",
+  "benchmark_commit": "7918e10fbb026c84502de42b5c789f0434efcb93",
+  "artifact": {
+    "repository": "mlx-community/Qwen3.5-35B-A3B-4bit",
+    "model_revision": "1e20fd8d42056f870933bf98ca6211024744f7ec",
+    "expert_pack_sha256": "9b26ebdf13a2863d607e1c3ea6e2528ff0267b7f472f8fd37fd20d3adb497e18"
+  },
+  "environment": {
+    "hardware": "MacBook Air Mac14,2, Apple M2, 8 GiB unified memory",
+    "operating_system": "macOS 26.6.2 build 25G83",
+    "dependencies": "mlx 0.32.2, mlx-lm 0.31.3, nanobind 2.15",
+    "storage": "active runtime artifact on internal APFS Apple Fabric storage",
+    "cache_state": "empty stable cache, F_NOCACHE expert reads",
+    "host_state": "Safari and VS Code were closed; Codex/ChatGPT remained open"
+  },
+  "workload": {
+    "prompt_mode": "heterogeneous project technical-reference document, truncated with an exact suffix",
+    "source": "docs/technical-reference.md",
+    "source_sha256_before_stage5_closeout": "2ecd441baf35cbe4cc281a5f6616174b42f371611a76fa465e87731a4869c93f",
+    "source_tokens": 19007,
+    "retained_document_tokens": 16080,
+    "suffix_tokens": 48,
+    "prompt_tokens": 16128,
+    "generated_tokens": 199,
+    "requested_generated_tokens": 256,
+    "sampler": "greedy",
+    "canonical_compact_output_token_json_sha256": "abeb090224c182084e0b0759c45b99c5590904a346b58cc3fa27b902a9cf1f6c",
+    "output_validation": "Parsed as JSON with exactly the four requested keys; generation terminated normally at EOS. The answer's 8K context statement reflected the pre-closeout source document, not a runtime failure."
+  },
+  "configuration": {
+    "memory_budget_bytes": 3221225472,
+    "requested_prefill_capacity": 320,
+    "selected_prefill_capacity": 235,
+    "decode_capacity": 320,
+    "prefill_policy": "global",
+    "decode_policy": "layer",
+    "prefill_chunk_size": 512,
+    "clear_allocator_cache_between_chunks": true,
+    "demand_workers": 8,
+    "prefetch_policy": "adaptive_cross",
+    "prefetch_budget": 2,
+    "prefetch_min_observations": 8
+  },
+  "capacity_plan": {
+    "minimum_capacity": 8,
+    "maximum_capacity": 235,
+    "selected_capacity": 235,
+    "estimated_prefill_peak_bytes": 3220136072,
+    "admitted": true,
+    "decode_restore_estimated_peak_bytes": 2833670280,
+    "decode_restore_admitted": true
+  },
+  "result": {
+    "completed": true,
+    "prefill_seconds": 501.2298387910123,
+    "time_to_first_token_seconds": 501.4654739999678,
+    "decode_tokens_per_second": 2.5202264403150094,
+    "decode_model_calls": 198,
+    "decode_latency_seconds": {
+      "mean": 0.39678974238323106,
+      "p50": 0.38411291694501415,
+      "p95": 0.4798446669592522,
+      "max": 0.5232460839906707
+    },
+    "prefill_hits": 4906825,
+    "prefill_misses": 254135,
+    "prefill_demand_bytes": 449684766720,
+    "prefill_pread_seconds": 264.309276217,
+    "prefill_expert_execute_seconds": 484.385794777,
+    "prefill_router_and_graph_wait_seconds": 197.24479734,
+    "decode_hits": 18763,
+    "decode_misses": 44597,
+    "decode_demand_bytes": 72109522944,
+    "decode_prefetch_bytes": 17924751360,
+    "decode_physical_bytes": 90034274304,
+    "decode_pread_seconds": 43.60331415600001,
+    "decode_expert_execute_seconds": 74.51099107000005,
+    "decode_router_and_graph_wait_seconds": 29.49949909900002,
+    "mlx_peak_bytes": 3075932354,
+    "mlx_peak_gib": 2.8646852307766676,
+    "decode_mlx_peak_bytes": 2488333996,
+    "process_rss_high_water_bytes": 1311211520,
+    "model_state_bytes": 399933440,
+    "swap_before_bytes": 1930166272,
+    "swap_after_bytes": 2072969216,
+    "swap_delta_bytes": 142802944,
+    "swap_delta_mib": 136.1875
+  },
+  "content_dependence": {
+    "comparison": "First synthetic repeated-token 16K run under the same prefill capacity and chunk size",
+    "synthetic_prefill_misses": 140945,
+    "synthetic_prefill_demand_bytes": 249398231040,
+    "heterogeneous_miss_increase_percent": 80.31,
+    "heterogeneous_byte_increase_percent": 80.31,
+    "interpretation": "Long-prompt routing and TTFT must be measured with representative content; repeated text substantially understated expert traffic."
+  },
+  "decision": {
+    "status": "successful practical extended-context qualification",
+    "strict_tier": "8K remains the zero-swap-qualified context tier.",
+    "extended_tier": "16K completed a representative document workload, stayed below the accepted 3.75-4 GiB MLX-peak band, and decoded above 2 tok/s. The 136 MiB system-wide swap increase is recorded as a caveat, not a functional failure.",
+    "rejected_tier": "32K is rejected on the current exact 512-token-chunk path after an unfinished approximately 52-minute prefill and approximately 1.10 GiB swap growth.",
+    "stage5_status": "complete for the current-version scope",
+    "future_versions": [
+      "Restore exact router/state equivalence for smaller prefill chunks before using them to pursue contexts beyond 16K.",
+      "Qualify incremental multi-turn state reuse; current sessions must re-render and prefill the transcript.",
+      "Run BF16-versus-4-bit quality evaluation only when Stage 6 is deliberately resumed and the user approves downloading BF16."
+    ]
+  }
+}
