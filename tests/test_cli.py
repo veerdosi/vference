@@ -21,3 +21,13 @@ def test_python_cli_keeps_serial_demand_default() -> None:
 
 def test_explicit_demand_worker_count_wins() -> None:
     assert _resolved_demand_workers("stable", 3) == 3
+
+
+def test_prompt_file_and_literal_prompt_are_exclusive() -> None:
+    parser = build_parser()
+    args = parser.parse_args(
+        ["stream-generate", "artifact", "--prompt-file", "document.md"]
+    )
+
+    assert str(args.prompt_file) == "document.md"
+    assert args.prompt is None

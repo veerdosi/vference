@@ -127,10 +127,13 @@ def _expert_math_verify(args: argparse.Namespace) -> None:
 
 
 def _stream_generate(args: argparse.Namespace) -> None:
+    prompt = args.prompt
+    if args.prompt_file is not None:
+        prompt = args.prompt_file.read_text()
     print_json(
         generate_greedy(
             args.artifact,
-            args.prompt,
+            prompt,
             max_tokens=args.max_tokens,
             cache_capacity=args.cache_capacity,
             decode_cache_capacity=args.decode_cache_capacity,
@@ -141,6 +144,8 @@ def _stream_generate(args: argparse.Namespace) -> None:
             store_kind=args.store,
             prefill_chunk_size=args.prefill_chunk_size,
             repeat_raw_prompt_to_tokens=args.repeat_raw_prompt_to_tokens,
+            truncate_raw_prompt_to_tokens=args.truncate_raw_prompt_to_tokens,
+            raw_prompt_suffix=args.raw_prompt_suffix,
             cache_policy=args.cache_policy,
             decode_cache_policy=args.decode_cache_policy,
             clear_cache_between_prefill_chunks=args.clear_cache_between_prefill_chunks,
@@ -269,7 +274,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     generate_parser = commands.add_parser("stream-generate")
     generate_parser.add_argument("artifact", type=Path)
-    generate_parser.add_argument("--prompt", required=True)
+    prompt_group = generate_parser.add_mutually_exclusive_group(required=True)
+    prompt_group.add_argument("--prompt")
+    prompt_group.add_argument("--prompt-file", type=Path)
     generate_parser.add_argument("--max-tokens", type=int, default=16)
     generate_parser.add_argument("--cache-capacity", type=int, default=320)
     generate_parser.add_argument("--decode-cache-capacity", type=int)
@@ -285,6 +292,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="allow an experimental multi-chunk Qwen prefill boundary that may change routing/output",
     )
     generate_parser.add_argument("--repeat-raw-prompt-to-tokens", type=int)
+    generate_parser.add_argument("--truncate-raw-prompt-to-tokens", type=int)
+    generate_parser.add_argument("--raw-prompt-suffix")
     generate_parser.add_argument(
         "--cache-policy", choices=("global", "layer", "demand"), default="global"
     )

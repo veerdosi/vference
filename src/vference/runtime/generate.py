@@ -49,6 +49,20 @@ def _validate_prefill_chunk_size(
         )
 
 
+def _compose_truncated_raw_prompt(
+    base_tokens: list[int], suffix_tokens: list[int], total_tokens: int
+) -> list[int]:
+    prefix_count = total_tokens - len(suffix_tokens)
+    if prefix_count < 1:
+        raise ValueError("raw prompt suffix leaves no room for document tokens")
+    if len(base_tokens) < prefix_count:
+        raise ValueError(
+            "raw prompt is too short for requested truncation target: "
+            f"need {prefix_count} document tokens, found {len(base_tokens)}"
+        )
+    return [*base_tokens[:prefix_count], *suffix_tokens]
+
+
 def _latency_summary(values: list[float]) -> dict[str, float]:
     ordered = sorted(values)
 
@@ -182,6 +196,8 @@ def generate_greedy(
     store_kind: str = "python",
     prefill_chunk_size: int = 1,
     repeat_raw_prompt_to_tokens: int | None = None,
+    truncate_raw_prompt_to_tokens: int | None = None,
+    raw_prompt_suffix: str | None = None,
     cache_policy: str = "global",
     decode_cache_policy: str | None = None,
     clear_cache_between_prefill_chunks: bool = False,
@@ -209,6 +225,12 @@ def generate_greedy(
     sampler = make_token_sampler(temperature=temperature, top_p=top_p, top_k=top_k)
     if repeat_raw_prompt_to_tokens is not None and repeat_raw_prompt_to_tokens < 1:
         raise ValueError("repeated raw prompt token count must be positive")
+    if truncate_raw_prompt_to_tokens is not None and truncate_raw_prompt_to_tokens < 1:
+        raise ValueError("truncated raw prompt token count must be positive")
+    if repeat_raw_prompt_to_tokens is not None and truncate_raw_prompt_to_tokens is not None:
+        raise ValueError("repeated and truncated raw prompt modes are exclusive")
+    if raw_prompt_suffix is not None and truncate_raw_prompt_to_tokens is None:
+        raise ValueError("raw prompt suffix requires truncated raw prompt mode")
     if (needle is None) != (needle_context_tokens is None):
         raise ValueError("needle and needle context token count must be set together")
     if needle_context_tokens is not None and needle_context_tokens < 1:
@@ -267,6 +289,13 @@ def generate_greedy(
                 *query_tokens,
             ]
             prompt_mode = "synthetic_needle_retrieval"
+        elif truncate_raw_prompt_to_tokens is not None:
+            base_tokens = tokenizer.encode(prompt, add_special_tokens=False)
+            suffix_tokens = tokenizer.encode(raw_prompt_suffix or "", add_special_tokens=False)
+            prompt_tokens = _compose_truncated_raw_prompt(
+                base_tokens, suffix_tokens, truncate_raw_prompt_to_tokens
+            )
+            prompt_mode = "truncated_raw_with_suffix" if suffix_tokens else "truncated_raw"
         elif repeat_raw_prompt_to_tokens is not None:
             base_tokens = tokenizer.encode(prompt, add_special_tokens=False)
             if not base_tokens:

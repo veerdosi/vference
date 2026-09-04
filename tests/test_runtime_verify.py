@@ -5,6 +5,7 @@ import numpy as np
 import pytest
 
 from vference.runtime.generate import (
+    _compose_truncated_raw_prompt,
     _detach_last_logits,
     _decode_resize_admission,
     _store_stats_delta,
@@ -126,6 +127,15 @@ def test_qwen_prefill_chunk_guard_requires_explicit_override() -> None:
     with pytest.raises(ValueError, match="not output-qualified"):
         _validate_prefill_chunk_size(7936, 256, False)
     _validate_prefill_chunk_size(7936, 256, True)
+
+
+def test_truncated_raw_prompt_reserves_exact_suffix_space() -> None:
+    assert _compose_truncated_raw_prompt(list(range(10)), [90, 91], 6) == [0, 1, 2, 3, 90, 91]
+
+
+def test_truncated_raw_prompt_rejects_short_document() -> None:
+    with pytest.raises(ValueError, match="too short"):
+        _compose_truncated_raw_prompt([1, 2], [90], 5)
 
 
 def test_store_stats_delta_separates_phase_counters() -> None:
