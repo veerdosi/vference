@@ -1,0 +1,427 @@
+{
+  "artifact": {
+    "expert_pack_sha256": "9b26ebdf13a2863d607e1c3ea6e2528ff0267b7f472f8fd37fd20d3adb497e18",
+    "model_revision": "1e20fd8d42056f870933bf98ca6211024744f7ec",
+    "repository": "mlx-community/Qwen3.5-35B-A3B-4bit"
+  },
+  "benchmark_commit": "835ef5986406cc5836d3da1e388fce9ce2f02102",
+  "configuration": {
+    "cache_capacity": 320,
+    "cache_policy": "layer",
+    "demand_workers": 8,
+    "forced_evaluation": "after every attention, MoE, final norm, and LM-head boundary",
+    "prefetch_policy": "none"
+  },
+  "decision": {
+    "correctness_observation": "The eight token IDs and decoded text match the previously qualified very_short application-corpus output.",
+    "decode_wall_share_percent": {
+      "moe": 79.49,
+      "linear_attention": 13.71,
+      "full_attention": 3.56,
+      "lm_head": 2.85,
+      "final_norm": 0.07
+    },
+    "next_coreml_candidate": "The 30 linear-attention blocks are the only resident component class above a 10% isolated decode-wall share. Profile and prototype a compressed fixed-shape projection boundary before considering integration.",
+    "status": "Component attribution under forced evaluation; not a throughput configuration"
+  },
+  "environment": {
+    "expert_reads": "F_NOCACHE",
+    "hardware": "MacBook Air Mac14,2, Apple M2, 8 GiB unified memory",
+    "operating_system": "macOS-26.6.2-arm64-arm-64bit",
+    "storage": "internal APFS Apple Fabric storage"
+  },
+  "experiment": "Qwen component timing with forced component-boundary evaluation",
+  "expert_store": {
+    "artifact_integrity": {
+      "bytes_hashed": 0,
+      "cached": true,
+      "elapsed_seconds": 0.0002662499900907278,
+      "file_count": 13,
+      "manifest_sha256": "06c2754d72e6a77ce5984d19ea0f27bcad17f866695cdaec1bd9c5edfd2fd1d1",
+      "stamp": "/Users/veerdosi/Documents/code/github/vference/artifacts/qwen3.5-35b-a3b-4bit-runtime/.vference-integrity.json",
+      "verified": true
+    },
+    "bytes_read": 7355695104,
+    "cache_policy": "layer",
+    "capacity": 320,
+    "capacity_transitions": [],
+    "demand_workers": 8,
+    "hits": 2883,
+    "implementation": "stable_native_slots",
+    "misses": 4157,
+    "nocache": true,
+    "per_layer": [
+      {
+        "hits": 15,
+        "materialize_seconds": 0.0,
+        "misses": 161,
+        "read_seconds": 0.206059962
+      },
+      {
+        "hits": 45,
+        "materialize_seconds": 0.0,
+        "misses": 131,
+        "read_seconds": 0.170572999
+      },
+      {
+        "hits": 71,
+        "materialize_seconds": 0.0,
+        "misses": 105,
+        "read_seconds": 0.135960456
+      },
+      {
+        "hits": 43,
+        "materialize_seconds": 0.0,
+        "misses": 133,
+        "read_seconds": 0.176254416
+      },
+      {
+        "hits": 56,
+        "materialize_seconds": 0.0,
+        "misses": 120,
+        "read_seconds": 0.157999374
+      },
+      {
+        "hits": 94,
+        "materialize_seconds": 0.0,
+        "misses": 82,
+        "read_seconds": 0.111804833
+      },
+      {
+        "hits": 90,
+        "materialize_seconds": 0.0,
+        "misses": 86,
+        "read_seconds": 0.11311642
+      },
+      {
+        "hits": 86,
+        "materialize_seconds": 0.0,
+        "misses": 90,
+        "read_seconds": 0.120484956
+      },
+      {
+        "hits": 85,
+        "materialize_seconds": 0.0,
+        "misses": 91,
+        "read_seconds": 0.10571692
+      },
+      {
+        "hits": 69,
+        "materialize_seconds": 0.0,
+        "misses": 107,
+        "read_seconds": 0.116300707
+      },
+      {
+        "hits": 90,
+        "materialize_seconds": 0.0,
+        "misses": 86,
+        "read_seconds": 0.094256586
+      },
+      {
+        "hits": 51,
+        "materialize_seconds": 0.0,
+        "misses": 125,
+        "read_seconds": 0.135477752
+      },
+      {
+        "hits": 73,
+        "materialize_seconds": 0.0,
+        "misses": 103,
+        "read_seconds": 0.11335833
+      },
+      {
+        "hits": 79,
+        "materialize_seconds": 0.0,
+        "misses": 97,
+        "read_seconds": 0.10667083
+      },
+      {
+        "hits": 97,
+        "materialize_seconds": 0.0,
+        "misses": 79,
+        "read_seconds": 0.087887085
+      },
+      {
+        "hits": 83,
+        "materialize_seconds": 0.0,
+        "misses": 93,
+        "read_seconds": 0.102543747
+      },
+      {
+        "hits": 76,
+        "materialize_seconds": 0.0,
+        "misses": 100,
+        "read_seconds": 0.110332665
+      },
+      {
+        "hits": 70,
+        "materialize_seconds": 0.0,
+        "misses": 106,
+        "read_seconds": 0.116338501
+      },
+      {
+        "hits": 72,
+        "materialize_seconds": 0.0,
+        "misses": 104,
+        "read_seconds": 0.113175501
+      },
+      {
+        "hits": 77,
+        "materialize_seconds": 0.0,
+        "misses": 99,
+        "read_seconds": 0.109375251
+      },
+      {
+        "hits": 78,
+        "materialize_seconds": 0.0,
+        "misses": 98,
+        "read_seconds": 0.108417458
+      },
+      {
+        "hits": 64,
+        "materialize_seconds": 0.0,
+        "misses": 112,
+        "read_seconds": 0.125429043
+      },
+      {
+        "hits": 81,
+        "materialize_seconds": 0.0,
+        "misses": 95,
+        "read_seconds": 0.105421748
+      },
+      {
+        "hits": 59,
+        "materialize_seconds": 0.0,
+        "misses": 117,
+        "read_seconds": 0.128001088
+      },
+      {
+        "hits": 79,
+        "materialize_seconds": 0.0,
+        "misses": 97,
+        "read_seconds": 0.106412834
+      },
+      {
+        "hits": 96,
+        "materialize_seconds": 0.0,
+        "misses": 80,
+        "read_seconds": 0.088166748
+      },
+      {
+        "hits": 82,
+        "materialize_seconds": 0.0,
+        "misses": 94,
+        "read_seconds": 0.10438496
+      },
+      {
+        "hits": 77,
+        "materialize_seconds": 0.0,
+        "misses": 99,
+        "read_seconds": 0.109583376
+      },
+      {
+        "hits": 79,
+        "materialize_seconds": 0.0,
+        "misses": 97,
+        "read_seconds": 0.107477125
+      },
+      {
+        "hits": 73,
+        "materialize_seconds": 0.0,
+        "misses": 103,
+        "read_seconds": 0.112573206
+      },
+      {
+        "hits": 72,
+        "materialize_seconds": 0.0,
+        "misses": 104,
+        "read_seconds": 0.1138
+      },
+      {
+        "hits": 87,
+        "materialize_seconds": 0.0,
+        "misses": 89,
+        "read_seconds": 0.098328956
+      },
+      {
+        "hits": 85,
+        "materialize_seconds": 0.0,
+        "misses": 91,
+        "read_seconds": 0.10081971
+      },
+      {
+        "hits": 76,
+        "materialize_seconds": 0.0,
+        "misses": 100,
+        "read_seconds": 0.108658877
+      },
+      {
+        "hits": 68,
+        "materialize_seconds": 0.0,
+        "misses": 108,
+        "read_seconds": 0.118575709
+      },
+      {
+        "hits": 70,
+        "materialize_seconds": 0.0,
+        "misses": 106,
+        "read_seconds": 0.116450582
+      },
+      {
+        "hits": 70,
+        "materialize_seconds": 0.0,
+        "misses": 106,
+        "read_seconds": 0.116087916
+      },
+      {
+        "hits": 69,
+        "materialize_seconds": 0.0,
+        "misses": 107,
+        "read_seconds": 0.117778125
+      },
+      {
+        "hits": 62,
+        "materialize_seconds": 0.0,
+        "misses": 114,
+        "read_seconds": 0.125014415
+      },
+      {
+        "hits": 34,
+        "materialize_seconds": 0.0,
+        "misses": 142,
+        "read_seconds": 0.154037753
+      }
+    ],
+    "policy_transitions": [],
+    "prefetch": {
+      "already_resident": 0,
+      "bytes_read": 0,
+      "cancelled": 0,
+      "copy_seconds": 0.0,
+      "failed": 0,
+      "late": 0,
+      "skipped_busy": 0,
+      "submitted": 0,
+      "total_physical_bytes": 7355695104,
+      "unused_completed": 0,
+      "useful": 0,
+      "wait_seconds": 0.0,
+      "wrong": 0
+    },
+    "prefetch_budget": 1,
+    "prefetch_min_observations": 8,
+    "prefetch_policy": "none",
+    "resident": 320,
+    "timing_seconds": {
+      "execute_total": 5.772786701,
+      "materialize": 0.0,
+      "pread": 4.76910692,
+      "router_and_graph_wait": 0.137319293
+    }
+  },
+  "interpretation": "Evaluation fences deliberately perturb scheduling and are for component attribution, not a throughput candidate.",
+  "memory": {
+    "mlx_active_bytes": 2015731850,
+    "mlx_cache_bytes": 21478350,
+    "mlx_peak_bytes": 2030863738
+  },
+  "recorded_at_local": "2026-09-04T21:09:03+08:00",
+  "timing": {
+    "components": {
+      "decode": {
+        "final_norm": {
+          "calls": 8,
+          "mean_seconds": 0.000252343625,
+          "p50_seconds": 0.00023375,
+          "p95_seconds": 0.000356666,
+          "total_seconds": 0.002018749
+        },
+        "full_attention": {
+          "calls": 80,
+          "mean_seconds": 0.0012127968625000002,
+          "p50_seconds": 0.000975875,
+          "p95_seconds": 0.00421225,
+          "total_seconds": 0.097023749
+        },
+        "linear_attention": {
+          "calls": 240,
+          "mean_seconds": 0.0015567395916666665,
+          "p50_seconds": 0.001164,
+          "p95_seconds": 0.003995084,
+          "total_seconds": 0.373617502
+        },
+        "lm_head": {
+          "calls": 8,
+          "mean_seconds": 0.009693869875,
+          "p50_seconds": 0.009764791,
+          "p95_seconds": 0.010038209,
+          "total_seconds": 0.077550959
+        },
+        "moe": {
+          "calls": 320,
+          "mean_seconds": 0.006770681640625,
+          "p50_seconds": 0.006533291,
+          "p95_seconds": 0.009541417,
+          "total_seconds": 2.166618125
+        }
+      },
+      "prefill": {
+        "final_norm": {
+          "calls": 1,
+          "mean_seconds": 0.000343083,
+          "p50_seconds": 0.000343083,
+          "p95_seconds": 0.000343083,
+          "total_seconds": 0.000343083
+        },
+        "full_attention": {
+          "calls": 10,
+          "mean_seconds": 0.0086524207,
+          "p50_seconds": 0.007681875,
+          "p95_seconds": 0.019269458,
+          "total_seconds": 0.086524207
+        },
+        "linear_attention": {
+          "calls": 30,
+          "mean_seconds": 0.0110306625,
+          "p50_seconds": 0.009192667,
+          "p95_seconds": 0.012714833,
+          "total_seconds": 0.330919875
+        },
+        "lm_head": {
+          "calls": 1,
+          "mean_seconds": 0.074579417,
+          "p50_seconds": 0.074579417,
+          "p95_seconds": 0.074579417,
+          "total_seconds": 0.074579417
+        },
+        "moe": {
+          "calls": 40,
+          "mean_seconds": 0.104586016625,
+          "p50_seconds": 0.098168208,
+          "p95_seconds": 0.141390584,
+          "total_seconds": 4.183440665
+        }
+      }
+    },
+    "decode_seconds": 2.7254874579957686,
+    "decode_tokens_per_second": 2.9352547473775314,
+    "prefill_seconds": 4.680892417032737,
+    "total_seconds": 7.406383083027322
+  },
+  "workload": {
+    "generated_tokens": 8,
+    "output_text": "Hello! How can I help you today",
+    "output_token_ids": [
+      9419,
+      0,
+      2500,
+      628,
+      353,
+      1438,
+      488,
+      3242
+    ],
+    "prompt": "Hi.",
+    "prompt_tokens": 14
+  }
+}

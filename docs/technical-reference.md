@@ -742,6 +742,26 @@ experiment toward a larger fixed-shape resident subgraph with enough measured
 runtime share to produce a material end-to-end gain. Full prefill evidence is
 in `experiments/runtime/stage7-coreml-shared-expert-prefill-2026-09-04.json`.
 
+To choose the next candidate from measured runtime share, a short live Qwen run
+forced evaluation after every attention, MoE, final-norm, and LM-head boundary.
+The fences intentionally change scheduling, so its 2.935 tok/s is not a new
+throughput claim. Its eight output token IDs still matched the previously
+qualified `very_short` corpus result. Within 2.725 seconds of fenced decode,
+MoE boundaries accounted for 79.49%, the 30 linear-attention blocks 13.71%, ten
+full-attention blocks 3.56%, the LM head 2.85%, and final norm 0.07%. This also
+confirms that the shared expert, as only part of MoE, could not have supported a
+material whole-runtime win by itself.
+
+Linear attention is the only resident component class above a 10% isolated
+decode-wall share and is therefore the next ANE candidate. The first boundary
+to test is its four input projection branches (`qkv`, `z`, `a`, and `b`), not
+the stateful gated-delta update. It has fixed decode/prefill shapes and avoids
+moving recurrent state into Core ML. A dense FP16 copy would be roughly 48 MiB
+per layer and is infeasible across 30 layers on this Mac; the prototype must
+first demonstrate a Core ML compressed representation of the existing
+group-64 affine 4-bit values and quantify its numerical difference. See
+`experiments/runtime/stage7-qwen-component-profile-2026-09-04.json`.
+
 ## 8. Correctness and quality qualification
 
 ### 8.1 Reference hierarchy
