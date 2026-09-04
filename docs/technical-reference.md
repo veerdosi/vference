@@ -762,6 +762,46 @@ first demonstrate a Core ML compressed representation of the existing
 group-64 affine 4-bit values and quantify its numerical difference. See
 `experiments/runtime/stage7-qwen-component-profile-2026-09-04.json`.
 
+The group-64 affine weights were then represented with Core ML's uint4
+`constexpr_blockwise_shift_scale`, avoiding a dense 48 MiB projection copy.
+For decode shape `(1, 1, 2048)`, `MLComputePlan` did not place any of the four
+linear operations on ANE: `all` selected GPU and CPU+ANE selected CPU. Core ML
+GPU measured 0.537 ms p50 versus 0.393 ms for MLX BF16 qmm (36.73% slower);
+CPU+ANE measured 0.896 ms (128.18% slower). Maximum/mean absolute error for the
+GPU result was 0.038574/0.003718. The compressed projection boundary is rejected
+for decode. See
+`experiments/runtime/stage7-coreml-linear-projections-decode-2026-09-04.json`.
+
+At shape `(1, 512, 2048)`, the projection linears still did not run on ANE.
+Core ML CPU+GPU was a branch-local GPU win at 11.657 ms p50 versus 17.177 ms for
+MLX BF16, but its maximum/mean absolute error was 0.039063/0.001545. The output
+boundary is 12,648,448 bytes per linear-attention layer, or 379,453,440 bytes
+across 30 layers for every full chunk before hidden copies. CPU+ANE placed only
+the concatenation on ANE while keeping the linears on CPU, and its maximum error
+rose to 0.101562. This is neither useful heterogeneous placement nor a safe
+runtime optimization, so the prefill projection boundary is also rejected. See
+`experiments/runtime/stage7-coreml-linear-projections-prefill-2026-09-04.json`.
+
+### 7.2 Current M2 ANE conclusion
+
+Stage 7 is complete for the current-version M2 target. Native Core ML execution
+and `MLComputePlan` prove that the Neural Engine is accessible and that a dense
+shared-expert graph is wholly ANE-eligible. No tested candidate satisfies all
+three required properties simultaneously: material end-to-end contribution,
+bounded memory/boundary cost, and numerical behavior safe enough to enter
+downstream qualification. The shared branch uses ANE but has at most a 0.50%
+prefill and 1.96% decode contribution; the larger compressed projections have
+enough potential runtime share but are not placed on ANE.
+
+The default runtime therefore remains MLX/Metal. This is an evidence-based
+rejection, not an assumption that ANE cannot help generative models. Reopen the
+workstream only for a materially different candidate, such as a compiler/runtime
+that can keep the existing 4-bit representation on ANE across a much larger
+stateful block without round-tripping large intermediates, or newer hardware
+whose compute plan places blockwise-compressed linears on ANE. The reusable
+MIL builder, native Swift runner, placement reporting, memory measurements, and
+numerical harness remain in `tools/` for that purpose.
+
 ## 8. Correctness and quality qualification
 
 ### 8.1 Reference hierarchy
@@ -1384,14 +1424,14 @@ equivalence to the pinned 4-bit artifact, not quality parity with BF16.
 
 ### Stage 7 — Core ML/ANE experiments
 
-Profile fixed/enumerated-shape subgraphs, inspect actual placement, and retain
-only end-to-end wins that fit memory and pass correctness. This is an explicit
-post-Stage-5 differentiating workstream: begin with fixed-shape candidates that
-can run independently of irregular expert routing, measure transfer and
-synchronization overhead, verify actual Core ML compute-unit placement, and
-compare full-pipeline latency and energy against MLX/Metal. No candidate may
-change router decisions, logits outside the accepted numerical tolerance, or
-generated output. The product remains functional if no ANE candidate wins.
+**Complete for the current-version M2 scope, with no accepted runtime
+candidate.** Fixed decode and 512-token prefill shapes were compiled, executed
+through native Core ML, inspected with `MLComputePlan`, and compared with MLX.
+The shared expert ran wholly on ANE but its derived whole-runtime ceiling was
+below 2%; the larger blockwise-INT4 projection group was assigned to GPU or CPU
+rather than ANE and failed its latency/numerical gate. The reusable harness is
+retained, but the exact MLX path remains the product path until materially
+different compiler support, graph boundaries, or hardware changes the result.
 
 ## 11. Main risks and falsification tests
 

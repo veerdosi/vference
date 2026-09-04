@@ -1,0 +1,506 @@
+{
+  "artifact": {
+    "expert_pack_sha256": "9b26ebdf13a2863d607e1c3ea6e2528ff0267b7f472f8fd37fd20d3adb497e18",
+    "manifest_sha256": "06c2754d72e6a77ce5984d19ea0f27bcad17f866695cdaec1bd9c5edfd2fd1d1",
+    "model_revision": "1e20fd8d42056f870933bf98ca6211024744f7ec",
+    "repository": "mlx-community/Qwen3.5-35B-A3B-4bit"
+  },
+  "benchmark_commit": "6e56d7e1b16b40420f37cbfa5635fb7218949607",
+  "coreml": {
+    "all": {
+      "compile_seconds": 0.028721916,
+      "compute_plan_operations": [
+        {
+          "operator": "ios18.constexpr_blockwise_shift_scale"
+        },
+        {
+          "operator": "const"
+        },
+        {
+          "estimated_cost_weight": 0.02610741333489526,
+          "operator": "ios18.linear",
+          "preferred_device": "gpu",
+          "supported_devices": [
+            "cpu",
+            "gpu"
+          ]
+        },
+        {
+          "operator": "ios18.constexpr_blockwise_shift_scale"
+        },
+        {
+          "operator": "const"
+        },
+        {
+          "estimated_cost_weight": 0.02609467801131726,
+          "operator": "ios18.linear",
+          "preferred_device": "gpu",
+          "supported_devices": [
+            "cpu",
+            "gpu"
+          ]
+        },
+        {
+          "operator": "ios18.constexpr_blockwise_shift_scale"
+        },
+        {
+          "operator": "const"
+        },
+        {
+          "estimated_cost_weight": 0.0003095425979923058,
+          "operator": "ios18.linear",
+          "preferred_device": "gpu",
+          "supported_devices": [
+            "cpu",
+            "gpu"
+          ]
+        },
+        {
+          "operator": "ios18.constexpr_blockwise_shift_scale"
+        },
+        {
+          "operator": "const"
+        },
+        {
+          "estimated_cost_weight": 0.0003095425979923058,
+          "operator": "ios18.linear",
+          "preferred_device": "gpu",
+          "supported_devices": [
+            "cpu",
+            "gpu"
+          ]
+        },
+        {
+          "operator": "const"
+        },
+        {
+          "operator": "const"
+        },
+        {
+          "estimated_cost_weight": 0.0011013603313358414,
+          "operator": "ios18.concat",
+          "preferred_device": "gpu",
+          "supported_devices": [
+            "cpu",
+            "gpu",
+            "neural_engine"
+          ]
+        }
+      ],
+      "compute_units": "all",
+      "input_name": "x",
+      "iterations": 1000,
+      "latency_seconds": {
+        "max": 0.002084458,
+        "mean": 0.0005553745480000002,
+        "min": 0.000485542,
+        "p50": 0.000536875,
+        "p95": 0.000617625
+      },
+      "load_seconds": 0.119422834,
+      "output_shape": [
+        1,
+        1,
+        12352
+      ],
+      "reference_error": {
+        "cosine_similarity": 0.9999759197235107,
+        "exact_fp16": false,
+        "max_absolute": 0.03857421875,
+        "mean_absolute": 0.0037182585801929235,
+        "output_sha256": "5c4e36add9bc3a94c0d23caf58a4ac45b7f1f9236e8d216778a0f86ac53dec57"
+      },
+      "resident_bytes": {
+        "after_benchmark": 71401472,
+        "after_load": 50053120,
+        "initial": 6356992,
+        "load_delta": 43696128
+      },
+      "warmup": 100
+    },
+    "cpu_gpu": {
+      "compile_seconds": 0.028309542,
+      "compute_plan_operations": [
+        {
+          "operator": "ios18.constexpr_blockwise_shift_scale"
+        },
+        {
+          "operator": "const"
+        },
+        {
+          "estimated_cost_weight": 0.026107413334895264,
+          "operator": "ios18.linear",
+          "preferred_device": "gpu",
+          "supported_devices": [
+            "cpu",
+            "gpu"
+          ]
+        },
+        {
+          "operator": "ios18.constexpr_blockwise_shift_scale"
+        },
+        {
+          "operator": "const"
+        },
+        {
+          "estimated_cost_weight": 0.026094678011317263,
+          "operator": "ios18.linear",
+          "preferred_device": "gpu",
+          "supported_devices": [
+            "cpu",
+            "gpu"
+          ]
+        },
+        {
+          "operator": "ios18.constexpr_blockwise_shift_scale"
+        },
+        {
+          "operator": "const"
+        },
+        {
+          "estimated_cost_weight": 0.00030954259799230585,
+          "operator": "ios18.linear",
+          "preferred_device": "gpu",
+          "supported_devices": [
+            "cpu",
+            "gpu"
+          ]
+        },
+        {
+          "operator": "ios18.constexpr_blockwise_shift_scale"
+        },
+        {
+          "operator": "const"
+        },
+        {
+          "estimated_cost_weight": 0.00030954259799230585,
+          "operator": "ios18.linear",
+          "preferred_device": "gpu",
+          "supported_devices": [
+            "cpu",
+            "gpu"
+          ]
+        },
+        {
+          "operator": "const"
+        },
+        {
+          "operator": "const"
+        },
+        {
+          "estimated_cost_weight": 0.0011013603313358416,
+          "operator": "ios18.concat",
+          "preferred_device": "gpu",
+          "supported_devices": [
+            "cpu",
+            "gpu"
+          ]
+        }
+      ],
+      "compute_units": "cpu_gpu",
+      "input_name": "x",
+      "iterations": 1000,
+      "latency_seconds": {
+        "max": 0.002093375,
+        "mean": 0.0005709557200000003,
+        "min": 0.000477916,
+        "p50": 0.00055325,
+        "p95": 0.000632459
+      },
+      "load_seconds": 0.102043375,
+      "output_shape": [
+        1,
+        1,
+        12352
+      ],
+      "reference_error": {
+        "cosine_similarity": 0.9999759197235107,
+        "exact_fp16": false,
+        "max_absolute": 0.03857421875,
+        "mean_absolute": 0.0037182585801929235,
+        "output_sha256": "5c4e36add9bc3a94c0d23caf58a4ac45b7f1f9236e8d216778a0f86ac53dec57"
+      },
+      "resident_bytes": {
+        "after_benchmark": 72056832,
+        "after_load": 49479680,
+        "initial": 6356992,
+        "load_delta": 43122688
+      },
+      "warmup": 100
+    },
+    "cpu_ne": {
+      "compile_seconds": 0.028639167,
+      "compute_plan_operations": [
+        {
+          "operator": "ios18.constexpr_blockwise_shift_scale"
+        },
+        {
+          "operator": "const"
+        },
+        {
+          "estimated_cost_weight": 0.05386711916219342,
+          "operator": "ios18.linear",
+          "preferred_device": "cpu",
+          "supported_devices": [
+            "cpu"
+          ]
+        },
+        {
+          "operator": "ios18.constexpr_blockwise_shift_scale"
+        },
+        {
+          "operator": "const"
+        },
+        {
+          "estimated_cost_weight": 0.05384084251869967,
+          "operator": "ios18.linear",
+          "preferred_device": "cpu",
+          "supported_devices": [
+            "cpu"
+          ]
+        },
+        {
+          "operator": "ios18.constexpr_blockwise_shift_scale"
+        },
+        {
+          "operator": "const"
+        },
+        {
+          "estimated_cost_weight": 0.1643976045419985,
+          "operator": "ios18.linear",
+          "preferred_device": "cpu",
+          "supported_devices": [
+            "cpu"
+          ]
+        },
+        {
+          "operator": "ios18.constexpr_blockwise_shift_scale"
+        },
+        {
+          "operator": "const"
+        },
+        {
+          "estimated_cost_weight": 0.1643976045419985,
+          "operator": "ios18.linear",
+          "preferred_device": "cpu",
+          "supported_devices": [
+            "cpu"
+          ]
+        },
+        {
+          "operator": "const"
+        },
+        {
+          "operator": "const"
+        },
+        {
+          "estimated_cost_weight": 0.0009489222562064257,
+          "operator": "ios18.concat",
+          "preferred_device": "cpu",
+          "supported_devices": [
+            "cpu",
+            "neural_engine"
+          ]
+        }
+      ],
+      "compute_units": "cpu_ne",
+      "input_name": "x",
+      "iterations": 1000,
+      "latency_seconds": {
+        "max": 0.001408833,
+        "mean": 0.0009023732019999995,
+        "min": 0.000841,
+        "p50": 0.000895958,
+        "p95": 0.000957375
+      },
+      "load_seconds": 0.102010875,
+      "output_shape": [
+        1,
+        1,
+        12352
+      ],
+      "reference_error": {
+        "cosine_similarity": 0.9999751448631287,
+        "exact_fp16": false,
+        "max_absolute": 0.0439453125,
+        "mean_absolute": 0.0037653075996786356,
+        "output_sha256": "953ea8aba8745743cca708835a3481c0e354963b0737aa85a4180b87adc10091"
+      },
+      "resident_bytes": {
+        "after_benchmark": 71680000,
+        "after_load": 17383424,
+        "initial": 6356992,
+        "load_delta": 11026432
+      },
+      "warmup": 100
+    },
+    "cpu_only": {
+      "compile_seconds": 0.051684459,
+      "compute_plan_operations": [
+        {
+          "operator": "ios18.constexpr_blockwise_shift_scale"
+        },
+        {
+          "operator": "const"
+        },
+        {
+          "estimated_cost_weight": 0.05386711916219342,
+          "operator": "ios18.linear",
+          "preferred_device": "cpu",
+          "supported_devices": [
+            "cpu"
+          ]
+        },
+        {
+          "operator": "ios18.constexpr_blockwise_shift_scale"
+        },
+        {
+          "operator": "const"
+        },
+        {
+          "estimated_cost_weight": 0.05384084251869967,
+          "operator": "ios18.linear",
+          "preferred_device": "cpu",
+          "supported_devices": [
+            "cpu"
+          ]
+        },
+        {
+          "operator": "ios18.constexpr_blockwise_shift_scale"
+        },
+        {
+          "operator": "const"
+        },
+        {
+          "estimated_cost_weight": 0.1643976045419985,
+          "operator": "ios18.linear",
+          "preferred_device": "cpu",
+          "supported_devices": [
+            "cpu"
+          ]
+        },
+        {
+          "operator": "ios18.constexpr_blockwise_shift_scale"
+        },
+        {
+          "operator": "const"
+        },
+        {
+          "estimated_cost_weight": 0.1643976045419985,
+          "operator": "ios18.linear",
+          "preferred_device": "cpu",
+          "supported_devices": [
+            "cpu"
+          ]
+        },
+        {
+          "operator": "const"
+        },
+        {
+          "operator": "const"
+        },
+        {
+          "estimated_cost_weight": 0.0009489222562064257,
+          "operator": "ios18.concat",
+          "preferred_device": "cpu",
+          "supported_devices": [
+            "cpu"
+          ]
+        }
+      ],
+      "compute_units": "cpu_only",
+      "input_name": "x",
+      "iterations": 1000,
+      "latency_seconds": {
+        "max": 0.00142225,
+        "mean": 0.0009001071060000008,
+        "min": 0.000844375,
+        "p50": 0.000894417,
+        "p95": 0.000950292
+      },
+      "load_seconds": 0.114642875,
+      "output_shape": [
+        1,
+        1,
+        12352
+      ],
+      "reference_error": {
+        "cosine_similarity": 0.9999751448631287,
+        "exact_fp16": false,
+        "max_absolute": 0.0439453125,
+        "mean_absolute": 0.0037653075996786356,
+        "output_sha256": "953ea8aba8745743cca708835a3481c0e354963b0737aa85a4180b87adc10091"
+      },
+      "resident_bytes": {
+        "after_benchmark": 71057408,
+        "after_load": 16842752,
+        "initial": 6356992,
+        "load_delta": 10485760
+      },
+      "warmup": 100
+    }
+  },
+  "coreml_artifact": {
+    "package_bytes": 14259551,
+    "representation": "Core ML uint4 blockwise shift-scale reconstructed from MLX group-64 affine weights"
+  },
+  "decision": {
+    "numeric_result": "Core ML all/GPU had 0.038574 maximum and 0.003718 mean absolute error versus MLX BF16 qmm; CPU+NE/CPU had 0.043945 maximum and 0.003765 mean error.",
+    "placement": "The compressed linear operations were GPU-preferred under all and CPU+GPU, and CPU-preferred under CPU+NE. No projection linear was Neural-Engine-preferred.",
+    "quality": "Any route or output change in downstream qualification rejects the candidate.",
+    "status": "rejected for decode: no ANE placement and slower than MLX",
+    "timing": "MLX BF16 p50 was 0.392646 ms. Core ML all/GPU was 0.536875 ms (36.73% slower); CPU+NE/CPU was 0.895958 ms (128.18% slower)."
+  },
+  "environment": {
+    "coremltools": "9.0",
+    "hardware": "MacBook Air Mac14,2, Apple M2, 8 GiB unified memory",
+    "operating_system": "macOS-26.6.2-arm64-arm-64bit"
+  },
+  "experiment": "Compressed Core ML GatedDeltaNet input-projection probe",
+  "mlx": {
+    "bfloat16": {
+      "latency_seconds": {
+        "max": 0.001730041,
+        "mean": 0.000405892853,
+        "min": 0.000362208,
+        "p50": 0.000392646,
+        "p95": 0.00045644999999999995
+      },
+      "reference_error": {
+        "cosine_similarity": 1.0000001192092896,
+        "exact_fp16": true,
+        "max_absolute": 0.0,
+        "mean_absolute": 0.0
+      }
+    },
+    "float16": {
+      "latency_seconds": {
+        "max": 0.001748459,
+        "mean": 0.0005072774140000001,
+        "min": 0.000455459,
+        "p50": 0.0004918335000000001,
+        "p95": 0.0005852396
+      },
+      "reference_error": {
+        "cosine_similarity": 0.9999759793281555,
+        "exact_fp16": false,
+        "max_absolute": 0.03955078125,
+        "mean_absolute": 0.0037113786675035954
+      }
+    }
+  },
+  "recorded_at_local": "2026-09-04T21:14:26+08:00",
+  "workload": {
+    "input_sha256": "80426f12de8833db125a32dc3d111d31cefe7ab0dd275d84e20c431c07e22b7a",
+    "input_source": "synthetic deterministic normal",
+    "iterations": 1000,
+    "layer": 0,
+    "output_size": 12352,
+    "shape": [
+      1,
+      1,
+      2048
+    ],
+    "warmup": 100
+  }
+}
