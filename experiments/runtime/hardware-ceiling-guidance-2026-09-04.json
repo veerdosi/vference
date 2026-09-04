@@ -1,0 +1,94 @@
+{
+  "experiment": "Derived hardware-ceiling guidance from accepted runtime measurements",
+  "recorded_at_local": "2026-09-04T23:30:00+08:00",
+  "classification": "derived estimates, not new hardware benchmarks",
+  "target": {
+    "hardware": "MacBook Air Mac14,2, Apple M2, 8 GiB unified memory",
+    "operating_system": "macOS 26.6.2 build 25G83",
+    "artifact": "mlx-community/Qwen3.5-35B-A3B-4bit at 1e20fd8d42056f870933bf98ca6211024744f7ec",
+    "expert_pack_sha256": "9b26ebdf13a2863d607e1c3ea6e2528ff0267b7f472f8fd37fd20d3adb497e18"
+  },
+  "measured_sources": {
+    "internal_storage": {
+      "source": "experiments/results.jsonl at benchmark commit 3068cbf",
+      "random_one_record_gb_per_second": 1.451,
+      "contiguous_eight_record_gb_per_second": 1.67,
+      "sequential_64_mib_gb_per_second": 1.643,
+      "parallel_exact_demand_gb_per_second_range": [
+        1.6499025999082317,
+        1.6532246471944458
+      ]
+    },
+    "accepted_8k": {
+      "source": "experiments/runtime/stage5-parallel-demand-2026-09-02.json",
+      "output_tokens": 256,
+      "decode_tokens_per_second": 2.5227124415222044,
+      "approximate_output_wall_seconds": 101.47807407075284,
+      "decode_demand_bytes": 99322232832,
+      "decode_demand_pread_seconds": 60.35840319399999,
+      "effective_demand_gb_per_second": 1.6455410941334059,
+      "decode_expert_execute_seconds": 96.18954353100003,
+      "decode_router_and_deferred_graph_seconds": 33.47648400700001
+    },
+    "representative_16k": {
+      "source": "experiments/runtime/stage5-context-16k-document-2026-09-04.json",
+      "prefill_seconds": 501.2298387910123,
+      "prefill_demand_bytes": 449684766720,
+      "prefill_demand_pread_seconds": 264.309276217,
+      "effective_prefill_demand_gb_per_second": 1.7013582465066617
+    },
+    "expert_pool_sweep": {
+      "source": "experiments/runtime/stage3-stable-slots-2026-09-01.json",
+      "records_320": {
+        "pool_bytes": 566231040,
+        "decode_tokens_per_second": 2.4076202295114197,
+        "mlx_peak_bytes": 2023306856
+      },
+      "records_640": {
+        "pool_bytes": 1132462080,
+        "decode_tokens_per_second": 2.6719669723377786,
+        "mlx_peak_bytes": 2589537896
+      },
+      "records_1024": {
+        "pool_bytes": 1811939328,
+        "decode_tokens_per_second": 3.0456493932327247,
+        "mlx_peak_bytes": 3269015144,
+        "observed_system_swap_delta_bytes": 499056640
+      }
+    }
+  },
+  "optimistic_storage_substitution": {
+    "assumption": "Only measured demand-read duration changes; traffic, cache behavior, prefetch, MLX work, synchronization, and every other wall-time component remain fixed. These are upper-bound projections, not promised results.",
+    "accepted_8k_decode": {
+      "at_3_decimal_gb_per_second": {
+        "replacement_read_seconds": 33.107410944,
+        "estimated_wall_seconds": 74.22708182075286,
+        "estimated_tokens_per_second": 3.4488759859669704
+      },
+      "at_5_decimal_gb_per_second": {
+        "replacement_read_seconds": 19.8644465664,
+        "estimated_wall_seconds": 60.984117443152854,
+        "estimated_tokens_per_second": 4.197814295478389
+      }
+    },
+    "representative_16k_prefill": {
+      "at_3_decimal_gb_per_second": {
+        "replacement_read_seconds": 149.89492224,
+        "estimated_prefill_seconds": 386.8154848140123,
+        "estimated_reduction_percent": 22.826724413090073
+      },
+      "at_5_decimal_gb_per_second": {
+        "replacement_read_seconds": 89.936953344,
+        "estimated_prefill_seconds": 326.8575159180123,
+        "estimated_reduction_percent": 34.7888951091965
+      }
+    }
+  },
+  "decisions": [
+    "The active M2 path is at the internal SSD ceiling for exact-demand reads.",
+    "Do not put the currently USB2-negotiated external VEER path on the critical inference path.",
+    "A storage replacement is interesting only after it beats approximately 1.65 GB/s on vference-sized random/coalesced reads at queue depth eight.",
+    "More unified memory can buy expert-cache and context headroom, but cache sweeps show that RAM alone does not remove MLX/GPU and synchronization costs.",
+    "No hardware projection changes the exact-router, top-8, or numerical correctness requirements."
+  ]
+}

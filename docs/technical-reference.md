@@ -1210,6 +1210,63 @@ Every benchmark manifest includes hardware identifier, RAM/storage capacity,
 macOS version, power state, model/artifact hash, dependency commits, prompt/output
 length, sampler, context cache state, and whether filesystem caches were warm.
 
+### 9.1 Measured bottleneck and hardware guidance
+
+The accepted 8K runtime has reached the active internal SSD's measured limit,
+not the external cable's limit. Eight concurrent exact-demand reads sustained
+approximately 1.65 GB/s both in the real-pack microbenchmark and in inference:
+the accepted decode moved 99,322,232,832 demand bytes in 60.358 seconds, or
+1.646 GB/s. Demand reads are therefore the largest exposed cost, but not the
+only one. The same decode recorded 96.190 seconds inside expert execution and
+33.476 seconds in the combined router/deferred-MLX-graph bucket. That second
+bucket contains useful GPU work and cannot simply be subtracted as overhead.
+
+The following figures are **derived optimistic upper bounds**, not benchmarks.
+They replace only measured demand-read time with `bytes / target bandwidth` and
+hold traffic, cache hits, prefetch, GPU work, synchronization, and all other
+wall-time components fixed:
+
+| Hypothetical sustained expert-read bandwidth | Estimated 8K decode | Estimated representative 16K prefill |
+| ---: | ---: | ---: |
+| Measured ~1.65 GB/s | 2.523 tok/s | 501.23 s |
+| 3.0 GB/s | at most ~3.45 tok/s | at best ~386.82 s (-22.8%) |
+| 5.0 GB/s | at most ~4.20 tok/s | at best ~326.86 s (-34.8%) |
+
+Real gains will be smaller once MLX/Metal work and control-flow dependencies
+become dominant. A candidate storage path is therefore relevant only if it
+sustains more than approximately 1.65 GB/s on 1,769,472-byte random and
+coalesced reads at queue depth eight. A nominal 10 Gb/s USB enclosure is not
+automatically an improvement. The current `VEER` connection previously
+negotiated at USB2 and measured only about 38 MB/s, so it remains source and
+overflow storage rather than an inference dependency. Do not re-benchmark it
+without a concrete plan to move the active pack.
+
+More unified memory addresses a different limit. A 640-record pool uses 1.132
+GB and was the best short-context policy; a 1,024-record pool uses 1.812 GB,
+raised the short-trace hit rate to 59.2%, and reached 3.046 tok/s, but coincided
+with 499 MB of swap growth on this 8 GB machine. Thus a Mac with at least 16 GB
+can safely explore a larger pool and has substantially more context/pressure
+headroom. It does not guarantee a proportional speedup: the 8 GB phase-resize
+tests already showed diminishing returns at 480 slots, and storage plus
+MLX/Metal synchronization remain after a hit-rate improvement.
+
+Hardware priorities follow directly from those measurements:
+
+1. On this Mac, keep the active pack on the internal SSD and improve traffic,
+   packing, overlap, or the MLX seam in software.
+2. For a storage-only experiment, use a genuinely faster Thunderbolt/USB4 NVMe
+   path and qualify it with the real expert access pattern before relocating
+   the active pack. It must exceed the internal path, not merely advertise a
+   high sequential rate.
+3. For the most reliable combined upgrade, prefer more unified memory together
+   with faster internal storage. Extra RAM primarily buys cache and context
+   headroom; faster storage primarily reduces miss stalls.
+
+The reproducible inputs, formula, and numerical projections are preserved in
+`experiments/runtime/hardware-ceiling-guidance-2026-09-04.json`. None of these
+options permits reduced top-K, approximate routing, or any other quality
+tradeoff.
+
 ## 10. Staged implementation plan and go/no-go gates
 
 ### Stage 0 — measurement harness
