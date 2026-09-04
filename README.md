@@ -34,14 +34,19 @@ The external `VEER` SSD holds the downloaded source checkpoint and inactive
 artifacts. Active repacked experts and other latency-critical runtime files
 preferentially live on the internal SSD, subject to a system free-space reserve.
 
-## Native development build
+## Install and build
 
-Install the pinned environment and build the stable-slot extension:
+Install the pinned environment. The project build now compiles and installs the
+stable-slot extension automatically:
 
 ```sh
 uv sync --dev
-make -C native build
 ```
+
+The distributable wheel is platform-specific; it is not a pure-Python wheel.
+`uv build` must compile and include `vference/native/_vference_native*.so`.
+For native-only iteration in an existing checkout, `make -C native build`
+remains available.
 
 The reference and native paths can then be selected explicitly with
 `vference stream-generate ... --store python` and `--store stable`. The current

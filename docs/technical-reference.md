@@ -1503,6 +1503,18 @@ rather than ANE and failed its latency/numerical gate. The reusable harness is
 retained, but the exact MLX path remains the product path until materially
 different compiler support, graph boundaries, or hardware changes the result.
 
+### Stage 8 — release reliability and packaging
+
+**In progress.** The build now uses a native CMake/scikit-build pipeline rather
+than emitting a misleading pure-Python wheel. A clean isolated build produced
+`vference-0.1.0-cp312-cp312-macosx_26_0_arm64.whl`, included the native
+stable-slot module, embedded a relocatable MLX library search path, installed
+into a fresh virtual environment, and passed a native `owned_zeros` import and
+allocation smoke test. The manual `make -C native build` route remains for
+checkout development. A release wheel must repeat this isolated install smoke
+test; a wheel without the native module is a build failure because the stable
+store is the qualified default.
+
 ## 11. Main risks and falsification tests
 
 | Risk                                             | Early falsification test                                          | Consequence                                                           |
