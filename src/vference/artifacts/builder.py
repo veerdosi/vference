@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import BinaryIO, Iterable
 
 from vference.adapters.base import ExpertLayer
-from vference.adapters.qwen35 import Qwen35MoeAdapter
+from vference.adapters import artifact_adapter_for_config
 
 from .safetensors import TensorEntry, classify_tensor, scan_model
 
@@ -152,11 +152,13 @@ def _copy_support_files(source: Path, destination: Path) -> dict[str, str]:
     return copied
 
 
-def build_qwen35_artifact(
+def build_artifact(
     source: Path,
     output: Path,
     *,
     min_free_bytes: int = DEFAULT_RESERVE_BYTES,
+    source_repository: str | None = None,
+    source_revision: str | None = None,
 ) -> BuildResult:
     started = time.monotonic()
     source = source.resolve()
@@ -164,11 +166,8 @@ def build_qwen35_artifact(
     if output.exists():
         raise FileExistsError(f"output already exists: {output}")
     config = json.loads((source / "config.json").read_text())
-    text_config = config["text_config"]
     entries = scan_model(source)
-    adapter = Qwen35MoeAdapter(
-        layers=text_config["num_hidden_layers"], experts=text_config["num_experts"]
-    )
+    adapter = artifact_adapter_for_config(config)
     layers = adapter.expert_layers(entries)
     core_entries = [entry for entry in entries.values() if classify_tensor(entry.name) == "text_core"]
     expert_bytes = sum(
@@ -205,8 +204,8 @@ def build_qwen35_artifact(
             "text_only": True,
             "source": {
                 "path": str(source),
-                "repository": "mlx-community/Qwen3.5-35B-A3B-4bit",
-                "revision": "1e20fd8d42056f870933bf98ca6211024744f7ec",
+                "repository": source_repository,
+                "revision": source_revision,
             },
             "quantization": config.get("quantization"),
             "tensor_counts": {
@@ -243,17 +242,39 @@ def build_qwen35_artifact(
     )
 
 
-def verify_qwen35_artifact(source: Path, artifact: Path) -> dict[str, object]:
+def build_qwen35_artifact(
+    source: Path,
+    output: Path,
+    *,
+    min_free_bytes: int = DEFAULT_RESERVE_BYTES,
+) -> BuildResult:
+    """Build the pinned first-adapter artifact with reproducible source identity."""
+    config = json.loads((source / "config.json").read_text())
+    if config.get("model_type") != "qwen3_5_moe":
+        raise ValueError("build_qwen35_artifact requires a qwen3_5_moe source")
+    return build_artifact(
+        source,
+        output,
+        min_free_bytes=min_free_bytes,
+        source_repository="mlx-community/Qwen3.5-35B-A3B-4bit",
+        source_revision="1e20fd8d42056f870933bf98ca6211024744f7ec",
+    )
+
+
+def verify_artifact(source: Path, artifact: Path) -> dict[str, object]:
     source = source.resolve()
     artifact = artifact.resolve()
     manifest = json.loads((artifact / "manifest.json").read_text())
     index = json.loads((artifact / "experts.index.json").read_text())
     entries = scan_model(source)
     config = json.loads((source / "config.json").read_text())
-    text_config = config["text_config"]
-    layers = Qwen35MoeAdapter(
-        layers=text_config["num_hidden_layers"], experts=text_config["num_experts"]
-    ).expert_layers(entries)
+    adapter = artifact_adapter_for_config(config)
+    if manifest.get("architecture_adapter") != adapter.name:
+        raise ValueError(
+            "artifact adapter does not match source config: "
+            f"{manifest.get('architecture_adapter')!r} != {adapter.name!r}"
+        )
+    layers = adapter.expert_layers(entries)
 
     failures: list[str] = []
     pack_path = artifact / "experts.pack"
@@ -329,3 +350,11 @@ def verify_qwen35_artifact(source: Path, artifact: Path) -> dict[str, object]:
         "expert_records_checked": len(layers) * layers[0].expert_count,
         "source_tensors_checked": len(source_core) + sum(len(layer.components) for layer in layers),
     }
+
+
+def verify_qwen35_artifact(source: Path, artifact: Path) -> dict[str, object]:
+    """Compatibility entry point for verification of the pinned first adapter."""
+    config = json.loads((source / "config.json").read_text())
+    if config.get("model_type") != "qwen3_5_moe":
+        raise ValueError("verify_qwen35_artifact requires a qwen3_5_moe source")
+    return verify_artifact(source, artifact)

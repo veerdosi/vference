@@ -5,6 +5,12 @@ sparse Mixture-of-Experts models larger than unified memory on Apple Silicon.
 Qwen3.5-35B-A3B on an 8 GB M2 MacBook Air is the first architecture adapter and
 validation target, not the intended permanent scope.
 
+The generic artifact path is also exercised with a synthetic Qwen3 MoE adapter:
+its different tensor prefix and sparse-layer map pass the same lossless pack and
+verification machinery. This is a boundary test, not a claim that a second real
+checkpoint is already qualified for inference; each architecture still needs a
+loader, memory profile, and exact-output suite before being listed as supported.
+
 The project has completed the lossless artifact build, exact streamed-expert
 runtime, asynchronous demand path, and current-version long-context
 qualification. The runtime loads the 1.38 GB resident core and streams exact
@@ -177,8 +183,11 @@ pinned 4-bit artifact's computation; it does not claim that the artifact is
 quality-equivalent to BF16. Do not download the BF16 checkpoint until that
 evaluation is deliberately resumed.
 
-Core ML/ANE exploration remains an explicit differentiating workstream. Only
-fixed/enumerated-shape subgraphs that Core ML actually places profitably on the
-Neural Engine are candidates. A candidate must preserve the qualified output
-and improve end-to-end latency or energy after transfer and synchronization
-costs; MLX/Metal remains the path for irregular MoE routing and decode.
+Core ML/ANE remains an explicit differentiating workstream, and the first M2
+qualification is complete. Native Core ML and `MLComputePlan` proved real ANE
+placement for the shared-expert graph, but its whole-runtime upside was below
+2%. A larger compressed linear-attention projection graph was assigned to GPU
+or CPU and did not clear the latency/numerical gate. Neither candidate is in the
+product path; the reusable harness remains for materially different compiler,
+graph-boundary, or hardware candidates. MLX/Metal continues to preserve the
+qualified computation.

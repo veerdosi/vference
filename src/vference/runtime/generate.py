@@ -12,15 +12,22 @@ import numpy as np
 import psutil
 
 from .admission import (
-    estimate_qwen35_admission,
     fit_expert_capacity,
     minimum_expert_capacity,
 )
-from .model import load_streaming_qwen
+from .model import Qwen35RuntimeAdapter, load_streaming_model
 from .sampling import make_token_sampler, select_token
 
-QUALIFIED_QWEN35_PREFILL_CHUNK_SIZE = 512
 DECODE_TRANSIENT_RESERVE_BYTES = 448 * 1024**2
+
+
+def _validate_prefill_chunk_size(
+    prompt_tokens: int, chunk_size: int, allow_unqualified: bool
+) -> None:
+    """Compatibility wrapper for the first adapter's qualification policy."""
+    Qwen35RuntimeAdapter().validate_prefill_chunk(
+        prompt_tokens, chunk_size, allow_unqualified
+    )
 
 
 def _detach_last_logits(logits: mx.array) -> mx.array:
@@ -32,21 +39,6 @@ def _detach_last_logits(logits: mx.array) -> mx.array:
         detached = mx.array(np.asarray(value).copy())
     mx.eval(detached)
     return detached
-
-
-def _validate_prefill_chunk_size(
-    prompt_tokens: int, chunk_size: int, allow_unqualified: bool
-) -> None:
-    if (
-        prompt_tokens > chunk_size
-        and chunk_size != QUALIFIED_QWEN35_PREFILL_CHUNK_SIZE
-        and not allow_unqualified
-    ):
-        raise ValueError(
-            f"multi-chunk Qwen3.5 prefill size {chunk_size} is not output-qualified; "
-            f"use {QUALIFIED_QWEN35_PREFILL_CHUNK_SIZE} or pass the explicit "
-            "experimental override"
-        )
 
 
 def _compose_truncated_raw_prompt(
@@ -248,7 +240,7 @@ def generate_greedy(
     memory_before = _memory_snapshot()
     swap_before = psutil.swap_memory()
     load_started = time.perf_counter()
-    model, tokenizer, store = load_streaming_qwen(
+    model, tokenizer, store, adapter = load_streaming_model(
         artifact,
         cache_capacity=cache_capacity,
         nocache=nocache,
@@ -314,16 +306,14 @@ def generate_greedy(
             prompt_tokens = tokenizer.encode(prompt, add_special_tokens=False)
         if not prompt_tokens:
             raise ValueError("prompt encoded to zero tokens")
-        _validate_prefill_chunk_size(
+        adapter.validate_prefill_chunk(
             len(prompt_tokens),
             prefill_chunk_size,
             allow_unqualified_prefill_chunk_size,
         )
 
         config = json.loads((artifact / "config.json").read_text())
-        text_config = config.get("text_config", config)
-        top_k = int(text_config["num_experts_per_tok"])
-        layer_count = int(text_config["num_hidden_layers"])
+        top_k, layer_count = adapter.route_shape(config)
         minimum_prefill_capacity = minimum_expert_capacity(
             route_width=top_k,
             layer_count=layer_count,
@@ -349,7 +339,7 @@ def generate_greedy(
         runtime_reserve_bytes = (
             (16 + 2 * max(0, prefetch_budget - 1)) * 1024**2 if prefetch_policy != "none" else 0
         )
-        admission = estimate_qwen35_admission(
+        admission = adapter.estimate_admission(
             config,
             resident_bytes=mx.get_active_memory(),
             total_tokens=len(prompt_tokens) + max_tokens,
@@ -378,7 +368,7 @@ def generate_greedy(
                 actual_prefill_capacity = capacity_plan.selected_capacity
                 if actual_prefill_capacity != cache_capacity:
                     store.resize_capacity(actual_prefill_capacity, cache_policy)
-                admission = estimate_qwen35_admission(
+                admission = adapter.estimate_admission(
                     config,
                     resident_bytes=mx.get_active_memory(),
                     total_tokens=len(prompt_tokens) + max_tokens,
@@ -411,7 +401,7 @@ def generate_greedy(
                 f"exceeds the {max_mlx_memory_bytes / 1024**3:.2f} GiB budget"
             )
 
-        cache = model.make_cache()
+        cache = adapter.make_cache(model)
         prefill_started = time.perf_counter()
         logits = None
         prefill_chunks: list[dict[str, int]] = []
@@ -476,6 +466,7 @@ def generate_greedy(
         final_store_stats = store.stats()
         decode_mlx_peak_bytes = mx.get_peak_memory()
         result = {
+            "architecture_adapter": adapter.name,
             "prompt": prompt,
             "chat_template": chat_template,
             "prompt_mode": prompt_mode,

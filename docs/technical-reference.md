@@ -299,7 +299,7 @@ config hash, tokenizer hash, tensor inventory, quantization mode/group size per
 tensor class, byte order, alignment, converter version, and output hashes.
 Preparation fails closed on any unknown/missing tensor.
 
-Format v1 is now implemented for the Qwen3.5 adapter. Records are ordered by
+Format v1 is now implemented behind an artifact-adapter registry. Records are ordered by
 layer, then expert ID. Within a record, gate/up/down weight, scale, and bias
 components have fixed indexed offsets. Conversion reads each stacked source
 tensor sequentially and writes expert slices directly to their final offsets,
@@ -308,6 +308,19 @@ built under a `.partial` name and atomically published only after the core,
 pack, index, support files, tensor digests, and whole-file hashes complete. The
 builder refuses internal placement if the estimated completed artifact would
 leave less than 30 GiB free.
+
+The first boundary check now includes a second model family without downloading
+another checkpoint. A synthetic, structurally valid `qwen3_moe` fixture uses
+its own sparse-layer selection and tensor prefix adapter, then passes the same
+generic pack builder and byte-for-byte verifier. The generation loop separately
+resolves runtime policy from `manifest.json`; Qwen3.5-specific route shape,
+512-token prefill qualification, state accounting, admission profile, and cache
+construction now live behind that runtime adapter. Unknown adapters fail before
+model load. This proves that the artifact format and builder are not tied to
+Qwen3.5 names, but it is deliberately not an end-to-end performance or quality
+claim for Qwen3 MoE. A real second checkpoint still requires its own loader,
+measured admission profile, and full correctness qualification before support
+can be advertised.
 
 ### 5.2 Memory controller
 
