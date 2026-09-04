@@ -616,6 +616,65 @@ Primary references:
 [stateful models](https://apple.github.io/coremltools/docs-guides/source/stateful-models.html), and
 [MLComputePlan/performance reports](https://developer.apple.com/videos/play/wwdc2024/10161/).
 
+### 7.1 First candidate and experiment gate
+
+A local artifact audit on 2026-09-04 measured the following resident 4-bit
+payload classes. These are safetensors payload bytes, not predicted Core ML
+runtime allocation:
+
+| Candidate class | Stored payload | Initial assessment |
+| --- | ---: | --- |
+| Linear-attention weights | 543.997 MiB | Large and stateful; defer until a smaller boundary works |
+| LM head | 272.812 MiB | Dense but produces 248,320 logits and risks a large duplicate allocation |
+| Embedding | 272.812 MiB | Memory-bound lookup with too little arithmetic for a first ANE candidate |
+| Full-attention weights | 146.260 MiB | KV/state and shape complexity make it a later candidate |
+| All 40 shared experts and gates | 67.544 MiB | Best first candidate: small fixed-shape dense GLU repeated in every layer |
+| Routers | 11.250 MiB | Must remain on the qualified path; changing router numerics is too risky |
+
+The first prototype is therefore one layer's shared expert plus its scalar gate,
+with decode input/output shape `(1, 1, 2048)` and intermediate width 512. It
+has a real overlap opportunity: after the normalized layer input is available,
+the shared branch and router both depend only on that input. The scheduler can
+launch the shared branch while CPU/native I/O resolves the exact routed experts,
+then join both branches before the existing addition. This is a dependency-
+valid overlap, unlike trying to run consecutive decoder layers concurrently.
+Prefill shape `(1, 512, 2048)` is a separate compiled bucket and benchmark.
+
+The project environment did not contain `coremltools` or a standalone Core ML
+compiler at audit time. Core ML Tools 9.0 is the stable conversion tool that
+supports Python 3.12 and macOS 26 targets. Its unified converter does not accept
+an MLX graph directly, so the minimal prototype should construct this small
+subgraph in MIL rather than add PyTorch solely as an interchange format. The
+generated `.mlpackage` and compiled model are experiment artifacts, not part of
+the source checkpoint.
+
+The stored weights use MLX 4-bit group-64 affine quantization. Core ML's 4-bit
+compression support is not assumed to reproduce `mx.quantized_matmul`; Core ML
+may decompress or schedule it differently depending on hardware. Test both a
+faithful reconstruction of the checkpoint values and any supported compressed
+representation, but treat them as separate candidates with separate hashes.
+Do not silently convert all 40 shared experts to FP16 and duplicate hundreds of
+MiB in memory.
+
+Before integration, freeze and record these comparisons for CPU+GPU, `all`, and
+CPU+Neural-Engine compute-unit selections:
+
+1. actual preferred/supported device placement from `MLComputePlan` or Xcode;
+2. compiled artifact size, load-time and peak-memory increment;
+3. warm p50/p95 latency for decode and the 512-token prefill bucket, including
+   MLX/Core ML boundary conversion;
+4. per-layer shared-branch error against the pinned MLX 4-bit computation;
+5. downstream route hashes, full logits, greedy and seeded-sampling outputs on
+   the existing exactness corpora; and
+6. end-to-end TTFT, decode throughput, energy, and exposed expert-stall time.
+
+Reject a candidate if it is not actually placed on ANE, changes any routed
+expert identity in the qualification corpus, changes qualified output tokens,
+exceeds the memory budget, or fails to improve end-to-end latency or energy.
+Until all gates pass, it remains isolated behind an experimental switch and the
+existing exact MLX path stays the default. This preserves current model quality
+even if Core ML proves unsuitable on M2.
+
 ## 8. Correctness and quality qualification
 
 ### 8.1 Reference hierarchy
