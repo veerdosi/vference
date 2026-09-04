@@ -1,0 +1,58 @@
+{
+  "experiment": "Exact 32K context feasibility with phase-aware cache fitting",
+  "recorded_at_local": "2026-09-04T16:56:26+08:00",
+  "benchmark_commit": "f1a14f7",
+  "artifact": {
+    "repository": "mlx-community/Qwen3.5-35B-A3B-4bit",
+    "model_revision": "1e20fd8d42056f870933bf98ca6211024744f7ec",
+    "expert_pack_sha256": "9b26ebdf13a2863d607e1c3ea6e2528ff0267b7f472f8fd37fd20d3adb497e18"
+  },
+  "environment": {
+    "hardware": "MacBook Air Mac14,2, Apple M2, 8 GiB unified memory",
+    "operating_system": "macOS 26.6.2 build 25G83",
+    "storage": "active runtime artifact on internal APFS Apple Fabric storage",
+    "cache_state": "empty stable cache, F_NOCACHE expert reads",
+    "host_state": "Safari and VS Code were closed; Codex/ChatGPT remained open"
+  },
+  "workload": {
+    "prompt_mode": "synthetic repeated raw tokens",
+    "prompt_tokens": 32512,
+    "requested_generated_tokens": 256,
+    "requested_total_tokens": 32768,
+    "sampler": "greedy"
+  },
+  "configuration": {
+    "memory_budget_bytes": 3221225472,
+    "requested_prefill_capacity": 320,
+    "planned_prefill_capacity": 45,
+    "requested_decode_capacity": 320,
+    "prefill_policy": "global",
+    "decode_policy": "layer",
+    "prefill_chunk_size": 512,
+    "clear_allocator_cache_between_chunks": true,
+    "demand_workers": 8,
+    "prefetch_policy": "adaptive_cross",
+    "prefetch_budget": 2,
+    "prefetch_min_observations": 8,
+    "estimated_prefill_peak_bytes": 3219480712
+  },
+  "observation": {
+    "elapsed_before_user_requested_stop_seconds_approx": 3130,
+    "prefill_completed": false,
+    "decode_started": false,
+    "output_file_bytes": 0,
+    "measured_mlx_peak_bytes": null,
+    "measured_mlx_peak_reason_missing": "MLX peak telemetry is emitted only in the completed result object; the process was interrupted during prefill.",
+    "swap_used_before_bytes_approx": 1024920125,
+    "swap_used_at_stop_bytes_approx": 2181824512,
+    "swap_growth_bytes_approx": 1156904387,
+    "live_stack_sample": "Main thread waited on MLX/Metal IOSurface events while demand-worker threads were active in native preadv; the process was working, not deadlocked."
+  },
+  "decision": {
+    "status": "rejected as unusable on the current exact path",
+    "reason": "The 32K prompt had not completed prefill after about 52 minutes and grew swap by about 1.10 GiB. Completion would not make that TTFT useful.",
+    "practical_context_target": 16384,
+    "deferred_work": "A smaller prefill chunk reduced memory in prior testing but changed router decisions and output. Deep chunk-boundary/kernel-state equivalence work is deferred rather than weakening correctness.",
+    "next_action": "Measure one heterogeneous, non-repeated 16K document workload."
+  }
+}
