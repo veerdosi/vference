@@ -178,6 +178,7 @@ def generate_greedy(
     artifact: Path,
     prompt: str,
     *,
+    messages: list[dict[str, str]] | None = None,
     max_tokens: int,
     cache_capacity: int,
     chat_template: bool,
@@ -229,6 +230,18 @@ def generate_greedy(
         raise ValueError("needle context token count must be positive")
     if needle is not None and repeat_raw_prompt_to_tokens is not None:
         raise ValueError("needle context and repeated-token stress mode are exclusive")
+    if messages is not None and not chat_template:
+        raise ValueError("structured messages require chat-template rendering")
+    if messages is not None and any(
+        value is not None
+        for value in (
+            needle,
+            repeat_raw_prompt_to_tokens,
+            truncate_raw_prompt_to_tokens,
+            raw_prompt_suffix,
+        )
+    ):
+        raise ValueError("structured messages cannot be combined with synthetic prompt modes")
     effective_decode_cache_policy = decode_cache_policy
     if effective_decode_cache_policy is None:
         effective_decode_cache_policy = "layer" if store_kind == "stable" else cache_policy
@@ -256,8 +269,19 @@ def generate_greedy(
     model_ready_at = time.perf_counter()
     memory_after_load = _memory_snapshot()
     try:
-        prompt_mode = "chat" if chat_template else "raw"
-        if needle is not None and needle_context_tokens is not None:
+        prompt_mode = "stateless_transcript" if messages is not None else (
+            "chat" if chat_template else "raw"
+        )
+        if messages is not None:
+            if not messages:
+                raise ValueError("structured message transcript cannot be empty")
+            prompt_tokens = tokenizer.apply_chat_template(
+                messages,
+                add_generation_prompt=True,
+                tokenize=True,
+                enable_thinking=enable_thinking,
+            )
+        elif needle is not None and needle_context_tokens is not None:
             filler_tokens = tokenizer.encode(prompt, add_special_tokens=False)
             needle_tokens = tokenizer.encode(
                 f"\nIMPORTANT FACT: The verification code is {needle}.\n",
@@ -468,6 +492,7 @@ def generate_greedy(
         result = {
             "architecture_adapter": adapter.name,
             "prompt": prompt,
+            "message_count": len(messages) if messages is not None else None,
             "chat_template": chat_template,
             "prompt_mode": prompt_mode,
             "needle": needle,

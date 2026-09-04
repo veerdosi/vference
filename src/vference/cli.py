@@ -2,8 +2,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import platform
+import sys
 from collections import Counter
 from pathlib import Path
+
+import psutil
 
 from .artifacts.builder import build_qwen35_artifact, verify_qwen35_artifact
 from .artifacts.safetensors import classify_tensor, scan_model
@@ -18,6 +22,8 @@ from .runtime.verify import (
 )
 from .runtime.generate import generate_greedy
 from .runtime.integrity import verify_artifact_integrity
+from .runtime.model import runtime_adapter_for_artifact
+from .native import extension
 from .system import mount_info, print_json
 
 
@@ -112,6 +118,63 @@ def _artifact_integrity(args: argparse.Namespace) -> None:
     print_json(verify_artifact_integrity(args.artifact, force=args.force))
 
 
+def _doctor(args: argparse.Namespace) -> None:
+    artifact = args.artifact.resolve()
+    checks: dict[str, object] = {}
+    failures: list[str] = []
+
+    machine = platform.machine()
+    platform_supported = platform.system() == "Darwin" and machine == "arm64"
+    checks["platform"] = {
+        "system": platform.system(),
+        "machine": machine,
+        "supported": platform_supported,
+    }
+    if not platform_supported:
+        failures.append("vference requires Apple Silicon macOS")
+
+    try:
+        native = extension()
+        probe = native.owned_zeros([1], "uint32")
+        checks["native_extension"] = {"available": True, "probe_shape": list(probe.shape)}
+    except Exception as error:
+        checks["native_extension"] = {"available": False, "error": str(error)}
+        failures.append("native stable-slot extension is unavailable")
+
+    try:
+        adapter = runtime_adapter_for_artifact(artifact)
+        checks["architecture_adapter"] = {"name": adapter.name, "supported": True}
+    except Exception as error:
+        checks["architecture_adapter"] = {"supported": False, "error": str(error)}
+        failures.append("artifact architecture is not supported")
+
+    try:
+        checks["integrity"] = verify_artifact_integrity(
+            artifact, force=args.force_integrity
+        )
+    except Exception as error:
+        checks["integrity"] = {"verified": False, "error": str(error)}
+        failures.append("artifact integrity verification failed")
+
+    pack = artifact / "experts.pack"
+    if pack.is_file():
+        checks["storage"] = mount_info(pack)
+    memory = psutil.virtual_memory()
+    checks["memory_bytes"] = {
+        "total": memory.total,
+        "available": memory.available,
+    }
+    result = {
+        "ready": not failures,
+        "artifact": str(artifact),
+        "checks": checks,
+        "failures": failures,
+    }
+    print_json(result)
+    if failures:
+        raise SystemExit(1)
+
+
 def _expert_math_verify(args: argparse.Namespace) -> None:
     result = verify_real_layer_math(
         args.source,
@@ -168,6 +231,67 @@ def _stream_generate(args: argparse.Namespace) -> None:
             seed=args.seed,
         )
     )
+
+
+def _chat(args: argparse.Namespace) -> None:
+    messages: list[dict[str, str]] = []
+    print("vference chat — /reset clears history, /quit exits", file=sys.stderr)
+    while True:
+        try:
+            prompt = input("you> ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print(file=sys.stderr)
+            return
+        if not prompt:
+            continue
+        if prompt in {"/quit", "/exit"}:
+            return
+        if prompt == "/reset":
+            messages.clear()
+            print("history cleared", file=sys.stderr)
+            continue
+        messages.append({"role": "user", "content": prompt})
+        try:
+            result = generate_greedy(
+                args.artifact,
+                prompt,
+                messages=messages,
+                max_tokens=args.max_tokens,
+                cache_capacity=args.cache_capacity,
+                chat_template=True,
+                enable_thinking=args.thinking,
+                nocache=args.nocache,
+                store_kind="stable",
+                prefill_chunk_size=512,
+                cache_policy="global",
+                decode_cache_policy="layer",
+                clear_cache_between_prefill_chunks=True,
+                max_mlx_memory_bytes=(
+                    int(args.max_mlx_memory_gib * 1024**3)
+                    if args.max_mlx_memory_gib is not None
+                    else None
+                ),
+                prefetch_policy="none",
+                demand_workers=8,
+                auto_cache_capacity=True,
+                temperature=args.temperature,
+                top_p=args.top_p,
+                top_k=args.top_k,
+                seed=args.seed,
+            )
+        except Exception as error:
+            messages.pop()
+            print(f"request failed: {error}", file=sys.stderr)
+            continue
+        response = str(result["output_text"])
+        print(f"assistant> {response}")
+        messages.append({"role": "assistant", "content": response})
+        print(
+            f"[{result['prompt_tokens']} prompt tokens; "
+            f"{len(result['output_tokens'])} output tokens; "
+            f"{result['decode_tokens_per_second'] or 0:.3f} decode tok/s]",
+            file=sys.stderr,
+        )
 
 
 def _multi_turn_verify(args: argparse.Namespace) -> None:
@@ -263,6 +387,13 @@ def build_parser() -> argparse.ArgumentParser:
     integrity_parser.add_argument("--force", action="store_true")
     integrity_parser.set_defaults(func=_artifact_integrity)
 
+    doctor_parser = commands.add_parser(
+        "doctor", help="verify the native runtime and artifact without loading the model"
+    )
+    doctor_parser.add_argument("artifact", type=Path)
+    doctor_parser.add_argument("--force-integrity", action="store_true")
+    doctor_parser.set_defaults(func=_doctor)
+
     math_parser = commands.add_parser("expert-math-verify")
     math_parser.add_argument("source", type=Path)
     math_parser.add_argument("artifact", type=Path)
@@ -329,6 +460,24 @@ def build_parser() -> argparse.ArgumentParser:
     generate_parser.add_argument("--top-k", type=int, default=0)
     generate_parser.add_argument("--seed", type=int, default=0)
     generate_parser.set_defaults(func=_stream_generate)
+
+    chat_parser = commands.add_parser(
+        "chat",
+        help="interactive exact stateless-transcript chat using the qualified stable store",
+    )
+    chat_parser.add_argument("artifact", type=Path)
+    chat_parser.add_argument("--max-tokens", type=int, default=256)
+    chat_parser.add_argument("--cache-capacity", type=int, default=320)
+    chat_parser.add_argument("--thinking", action="store_true")
+    chat_parser.add_argument(
+        "--nocache", action=argparse.BooleanOptionalAction, default=True
+    )
+    chat_parser.add_argument("--max-mlx-memory-gib", type=float)
+    chat_parser.add_argument("--temperature", type=float, default=0.0)
+    chat_parser.add_argument("--top-p", type=float, default=1.0)
+    chat_parser.add_argument("--top-k", type=int, default=0)
+    chat_parser.add_argument("--seed", type=int, default=0)
+    chat_parser.set_defaults(func=_chat)
 
     multi_turn_parser = commands.add_parser("multi-turn-verify")
     multi_turn_parser.add_argument("artifact", type=Path)

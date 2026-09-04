@@ -1505,7 +1505,8 @@ different compiler support, graph boundaries, or hardware changes the result.
 
 ### Stage 8 — release reliability and packaging
 
-**In progress.** The build now uses a native CMake/scikit-build pipeline rather
+**Complete for the current-version local release scope.** The build now uses a
+native CMake/scikit-build pipeline rather
 than emitting a misleading pure-Python wheel. A clean isolated build produced
 `vference-0.1.0-cp312-cp312-macosx_26_0_arm64.whl`, included the native
 stable-slot module, embedded a relocatable MLX library search path, installed
@@ -1514,6 +1515,24 @@ allocation smoke test. The manual `make -C native build` route remains for
 checkout development. A release wheel must repeat this isolated install smoke
 test; a wheel without the native module is a build failure because the stable
 store is the qualified default.
+
+The CLI now also provides `vference chat`. It retains user/assistant messages,
+but each turn re-renders the complete transcript through the qualified one-pass
+path and reloads the runtime rather than reusing Qwen's numerically non-invariant
+incremental state. `/reset` and `/quit` are explicit, and a failed or admission-
+rejected request is removed from the transcript. This is the safe current-
+version chat contract; resident model reuse is a performance refinement, while
+incremental state reuse remains a future correctness project.
+
+`vference doctor` performs the non-inference preflight: Apple Silicon platform,
+native extension allocation, manifest-selected adapter, cached or forced
+artifact integrity, available memory, and the actual expert-pack mount. It
+fails nonzero if a required check fails and does not load model weights. On the
+current artifact it passed with the exact manifest hash and confirmed the pack
+is on internal APFS over Apple Fabric. This closes installation, packaged-native
+availability, actionable preflight, failure behavior, and ordinary terminal
+use for the current scope; it does not promote deferred BF16 quality work or
+incremental session-state reuse into release requirements.
 
 ## 11. Main risks and falsification tests
 

@@ -48,6 +48,18 @@ The distributable wheel is platform-specific; it is not a pure-Python wheel.
 For native-only iteration in an existing checkout, `make -C native build`
 remains available.
 
+Before inference, verify the host, compiled extension, manifest adapter,
+artifact hashes, memory availability, and storage placement without loading the
+model:
+
+```sh
+uv run vference doctor artifacts/qwen3.5-35b-a3b-4bit-runtime
+```
+
+The normal check reuses the file-identity-bound integrity stamp. Add
+`--force-integrity` only when deliberately requesting a complete 19.5 GB
+rehash.
+
 The reference and native paths can then be selected explicitly with
 `vference stream-generate ... --store python` and `--store stable`. The current
 best qualified short-context decode configuration is:
@@ -73,6 +85,20 @@ uv run vference stream-generate artifacts/qwen3.5-35b-a3b-4bit-runtime \
   --demand-workers 8 --prefetch-policy adaptive_cross --prefetch-budget 2 \
   --nocache
 ```
+
+For ordinary terminal use, start an interactive chat with the conservative
+320-slot configuration:
+
+```sh
+uv run vference chat artifacts/qwen3.5-35b-a3b-4bit-runtime
+```
+
+Use `/reset` to clear the transcript and `/quit` to exit. Every turn re-renders
+the complete user/assistant transcript and prefills it in one qualified request.
+The current implementation also reloads the model between turns. That costs
+startup time, but it intentionally avoids the deferred incremental-state path
+whose logits are not one-pass exact. Requests that exceed the admitted memory
+envelope fail without adding the unsuccessful turn to history.
 
 The serial-demand predecessor averaged 2.278 decode tok/s across three identical
 8K-total-token runs without swap growth, and a separate 7,936-token needle

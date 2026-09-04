@@ -1,3 +1,7 @@
+import builtins
+from copy import deepcopy
+
+import vference.cli as cli
 from vference.cli import _resolved_demand_workers, build_parser
 
 
@@ -31,3 +35,48 @@ def test_prompt_file_and_literal_prompt_are_exclusive() -> None:
 
     assert str(args.prompt_file) == "document.md"
     assert args.prompt is None
+
+
+def test_chat_defaults_to_qualified_stateless_configuration() -> None:
+    args = build_parser().parse_args(["chat", "artifact"])
+
+    assert args.cache_capacity == 320
+    assert args.max_tokens == 256
+    assert args.nocache
+
+
+def test_doctor_defaults_to_cached_integrity_check() -> None:
+    args = build_parser().parse_args(["doctor", "artifact"])
+
+    assert str(args.artifact) == "artifact"
+    assert not args.force_integrity
+
+
+def test_chat_rerenders_complete_transcript_each_turn(monkeypatch) -> None:
+    prompts = iter(["first", "second", "/quit"])
+    calls = []
+    outputs = iter(["answer one", "answer two"])
+
+    monkeypatch.setattr(builtins, "input", lambda _: next(prompts))
+
+    def fake_generate(*args, **kwargs):
+        calls.append(deepcopy(kwargs["messages"]))
+        return {
+            "output_text": next(outputs),
+            "prompt_tokens": 10,
+            "output_tokens": [1],
+            "decode_tokens_per_second": 2.5,
+        }
+
+    monkeypatch.setattr(cli, "generate_greedy", fake_generate)
+    args = build_parser().parse_args(["chat", "artifact"])
+    args.func(args)
+
+    assert calls == [
+        [{"role": "user", "content": "first"}],
+        [
+            {"role": "user", "content": "first"},
+            {"role": "assistant", "content": "answer one"},
+            {"role": "user", "content": "second"},
+        ],
+    ]
